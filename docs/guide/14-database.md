@@ -51,14 +51,13 @@ export class Widgets {
 }
 ```
 
-`BunSQLiteDatabase` and `BunSQLDatabase` are real runtime classes, so a class is
-usable as a token directly: `@dunx/transform` records the bare type name while
-ignoring the type argument. One erased class is the token; the schema types
-stay on the annotation. There is no wrapper in that constructor.
+Inject drizzle's own class, such as `BunSQLiteDatabase<typeof schema>`. There is
+no dunx wrapper. `@dunx/transform` resolves the class and ignores the type
+argument, which only gives you the schema types.
 
-`schema` is required for that reason: it is the type argument that reaches
-`BunSQLiteDatabase<typeof schema>` at every injection site. Pass `{}` if you only
-run `sql` templates.
+`schema` is required because it supplies the type argument in
+`BunSQLiteDatabase<typeof schema>` at every injection site. Pass `{}` if you
+only run `sql` templates.
 
 ## What `DbModule` binds
 
@@ -68,10 +67,9 @@ run `sql` templates.
 | `DbConnection`                                          | The lifecycle and the raw driver handle                    |
 | `BunSQLiteDatabase` / `BunSQLDatabase` / `SyncDatabase` | The drizzle handle a repository injects                    |
 
-The drizzle handle is bound through a factory that depends on `DbConnection`,
-which fixes the shutdown order. dunx tears down in reverse construction order, so
-the connection is constructed first and closes last, after every repository has
-drained.
+The connection closes last on shutdown, after every repository has finished.
+dunx shuts down in reverse construction order, and the drizzle handle is built
+from `DbConnection`, so the connection is always constructed first.
 
 Every factory settles before the first constructor runs, so the connection is open
 and handshaked before any repository is built. There is no lazy connect and no
@@ -91,9 +89,9 @@ DbModule.forRootAsync(SyncDatabase, {
 });
 ```
 
-The token is a positional argument here, unlike `forRoot`. Which drizzle class the
-handle is bound under only becomes known once the factory has produced the
-options, which is too late to register a provider under it.
+Unlike `forRoot`, the token is the first argument. The drizzle class depends on
+the options, and the options only exist after the factory runs. That is too late
+to register a provider, so you name the token up front.
 
 See [Configuration](./12-configuration.md) for why the parameter is
 `AppConfigService` rather than `ConfigService<AppConfig>`.
@@ -111,9 +109,9 @@ cases separately, because they are different problems.
 
 ### Named data sources
 
-A default registration binds `DbOptions`, `DbConnection` and drizzle's own class.
-A second registration cannot bind those again, so a name moves all of them onto
-per-name tokens:
+Give each extra database a `name`. An unnamed registration binds `DbOptions`,
+`DbConnection` and drizzle's class. A named registration binds its own copy of
+each under that name instead:
 
 ```ts
 @Module({
@@ -127,8 +125,8 @@ per-name tokens:
 export class DataModule {}
 ```
 
-Four token factories address a named registration. Each memoises on its
-description, so the module and the consumer hold the same token for one name:
+Four functions return the tokens of a named registration. Each returns the same
+token for the same name, so the module and its consumers always agree:
 
 | Factory              | Resolves to                              |
 | -------------------- | ---------------------------------------- |
@@ -152,9 +150,9 @@ export class Reports {
 }
 ```
 
-The type argument on `dbHandle` is what carries drizzle's inference to the query.
-A registry object returning a union across schemas would lose it, so the static
-case has no `dataSources.get('reporting')`.
+The type argument on `dbHandle` gives your queries drizzle's types. A lookup
+such as `dataSources.get('reporting')` would have to return a union across
+schemas and would lose them, so named data sources have no such method.
 
 `forRootAsync` takes the same `name`. Its first argument then fixes what
 `dbHandle(name)` resolves to rather than being the binding itself:
@@ -236,9 +234,10 @@ protection, and a handle kept across an await may outlive its data source.
 `sweepMs`, which defaults to `idleMs`, so a data source lives for at most the two
 added together after its last use. `idleMs: 0` keeps every one until shutdown.
 
-Eviction frees the slot at once and closes behind it, so admission never waits on
-another tenant's close, and `closeTimeoutMs` bounds the wait on an open as well
-as on the close. `close()` still waits for every one of those before it resolves.
+Eviction frees the slot immediately and closes the old data source in the
+background, so opening one tenant's data source never waits for another tenant's
+to close. `closeTimeoutMs` limits both an open and a close. `close()` still
+waits for every pending close before it resolves.
 
 A `create` that throws is not cached. The entry is dropped, so the next
 resolution calls `create` again rather than serving the failure forever.
@@ -248,10 +247,10 @@ shared `QueryMetrics`, bound under `dbMetrics(name)`, where `name` defaults to
 the class name. Two pools whose classes share a name need one each. A set of
 histograms per tenant would grow without a bound; the pool's does not.
 
-The pool is constructed before anything that injects it, so dunx's reverse
-construction order drains every consumer first and then closes every live data
-source. `forDataSourcesAsync` is the same with the init behind a factory that may
-await and inject.
+The pool is built before anything that injects it, so at shutdown every consumer
+finishes first and then the pool closes every live data source.
+`forDataSourcesAsync` works the same way, with the init returned by a factory
+that can await and inject.
 
 ## Two backends, and they are not interchangeable
 
@@ -289,9 +288,9 @@ before any I/O. A non-Postgres URL throws with a message saying why:
 > drizzle-orm 0.45.2's `bun-sql/driver.js`, there is no branch on
 > `client.options.adapter` anywhere in the module.
 
-Pointed at a `sqlite://` client it does not error. It compiles `$1` placeholders
-and Postgres identifier quoting against SQLite, the trivial cases pass, and that
-is worse than failing. So `SqlOptions` refuses.
+drizzle does not fail when given a `sqlite://` client. It sends Postgres syntax
+(`$1` placeholders, Postgres identifier quoting) to SQLite, simple queries pass,
+and the rest break later. So `SqlOptions` refuses the URL.
 
 The handshake is awaited inside `open()` rather than deferred to the first query.
 
@@ -325,9 +324,9 @@ of letting `drizzle('./dev.db')` do it: drizzle's own path forwards only
 
 ### drizzle's own options: `casing` and `logger`
 
-Both backends' init types extend `DrizzleInit`, whose two fields are drizzle's and
-are forwarded to `drizzle()` untouched. They are the reason opening the handle by
-hand is not the only way to reach them:
+Both backends' init types extend `DrizzleInit`. Its two fields, `casing` and
+`logger`, are passed to `drizzle()` unchanged, so you can set them without
+opening the handle yourself:
 
 ```ts
 DbModule.forRoot(
@@ -346,28 +345,28 @@ drizzle-kit generates migrations from the config while the handle queries with
 this - if they disagree, the migration writes one column name and the query reads
 another.
 
-`logger` takes `true` for drizzle's own console output, or anything with a
-`logQuery(query, params)` method. Routing it into the injected `Logger` at `debug`
-is how a slow endpoint gets diagnosed without a proxy in front of the database. It
-is per-connection, so a `DB_LOG_QUERIES` env flag is just
-`logger: config.DB_LOG_QUERIES` inside a `forRootAsync` factory.
+`logger` takes `true` for drizzle's console output, or any object with a
+`logQuery(query, params)` method. Send it to the injected `Logger` at `debug` to
+see what a slow endpoint queries. It is set per connection, so a
+`DB_LOG_QUERIES` env flag is `logger: config.DB_LOG_QUERIES` inside a
+`forRootAsync` factory.
 
-`SqlOptions` consumes both before building the `Bun.SQL` options, exactly as it
-consumes `schema` and `url` - the driver has no idea what `casing` means.
+`SqlOptions` removes both before building the `Bun.SQL` options, as it does with
+`schema` and `url`. The driver does not know what `casing` means.
 
 ## Synchronous mode: `SyncSqliteOptions`
 
-`bun:sqlite` is synchronous underneath, and `@dunx/http` has a dispatch path that
-allocates no promise when a handler returns a plain value, so a request can go
-parse, query, respond without ever yielding.
+`bun:sqlite` is synchronous, and `@dunx/http` allocates no promise when a
+handler returns a plain value. A request can therefore parse, query and respond
+without yielding.
 
-Reads already could, drizzle's bun-sqlite builders having `.all()`, `.get()` and
-`.run()`. A **write** was stopped by `transaction()`, which returns a promise, so
-any route that wrote anything went back to `async`.
+Reads already work this way, with drizzle's `.all()`, `.get()` and `.run()`.
+Writes did not: `transaction()` returns a promise, so any route that wrote had
+to be `async`.
 
-`SyncSqliteOptions` closes that. Every init field is `SqliteOptions`'s. Choosing it
-changes exactly two things: the token becomes `SyncDatabase`, and
-`transactionSync(db, fn)` becomes reachable.
+`SyncSqliteOptions` fixes that. It takes the same fields as `SqliteOptions` and
+changes two things: the token becomes `SyncDatabase`, and you can call
+`transactionSync(db, fn)`.
 
 ```ts
 DbModule.forRoot(new SyncSqliteOptions({ schema, filename: './dev.db' }));
@@ -421,11 +420,11 @@ at boot, nothing having bound that token.
 
 ### How to choose, and what it is actually worth
 
-Measured through a real `Bun.serve`, synchronous mode is **about 4-6% more req/s
-and 0.2-0.3 ms off p50**, at the edge of the benchmark machine's noise floor:
-about 3 µs saved on roughly 57 µs of service time. The 5-10 ms versus 30-50 ms
-difference people expect from SQLite comes from an embedded database versus a
-networked one, and `SqliteOptions` gets it just as much as `SyncSqliteOptions`.
+Synchronous mode is only slightly faster. Through a real `Bun.serve` it gives
+**about 4-6% more req/s and 0.2-0.3 ms lower p50**, close to the benchmark
+machine's noise: about 3 µs saved on roughly 57 µs of service time. SQLite's big
+speed advantage (5-10 ms against 30-50 ms) comes from being embedded rather than
+networked, and both `SqliteOptions` and `SyncSqliteOptions` get it.
 
 The table and method are in [the database layer](../architecture/database.md).
 
@@ -436,10 +435,9 @@ So:
 - **Pick `SyncSqliteOptions`** if SQLite is the decision for good and you want a
   request path with no promise in it at all. Sync mode is SQLite forever.
 
-`Bun.SQL` talks to a server over a socket, and no amount of API design makes a
-Postgres query return a row instead of a promise. That asymmetry is structural:
-`SqlOptions` has no sync sibling, and `transactionSync` does not accept a
-`BunSQLDatabase`. There is **no `SyncSqlOptions`, and there will not be one.**
+Postgres has no synchronous mode. `Bun.SQL` talks to the server over a socket,
+so every query returns a promise. There is no `SyncSqlOptions`, and
+`transactionSync` does not accept a `BunSQLDatabase`.
 
 ## Querying
 
@@ -504,9 +502,9 @@ export const audit = sqliteTable('audit', {
 db.insert(audit).values({ at: new Date() }).run();
 ```
 
-The mapping belongs to the **column**, so it applies to the builder and never to a
-`sql` template. Postgres is the exception: it parses a `timestamptz` from the
-string and takes a native `Date` binding as well.
+The column's `mode` does the mapping. The query builder uses it; a `sql`
+template does not. On Postgres you can bind a `Date` directly, and Postgres also
+parses a `timestamptz` from a string.
 
 ## Transactions
 
@@ -545,27 +543,25 @@ statement after it runs in autocommit, and a later throw rolls back nothing.
 Measured on Bun 1.3.14: insert, `await Bun.sleep(1)`, throw, catch, and the row is
 still there.
 
-drizzle inherits the behaviour rather than fixing it, so `transaction()` issues
-`BEGIN`/`COMMIT`/`ROLLBACK` itself. There is only one connection, so two
-overlapping top-level transactions would issue a nested `BEGIN`; they queue
-instead. A nested call is already inside the holder's turn and takes a savepoint,
-so it must not queue behind itself.
+So on `bun:sqlite`, dunx's `transaction()` sends `BEGIN`, `COMMIT` and
+`ROLLBACK` itself. SQLite has one connection, so two top-level transactions
+cannot overlap: the second waits for the first to finish. A nested call takes a
+savepoint and does not wait.
 
 On **Postgres** the same function delegates to drizzle's `db.transaction()`,
 which is genuinely async: `Bun.SQL`'s `begin()` reserves a connection for the
 duration.
 
-The callback there receives drizzle's `PgTransaction` (exported as
-`SqlTransaction<TSchema>`) rather than the database, since the pooled outer
-handle would take a different connection and sit outside the transaction. Nesting
-on Postgres is therefore `tx.transaction(...)`, drizzle's own savepoint.
+On Postgres, run every query through `tx`, not the outer `db`. `tx` is
+drizzle's `PgTransaction` (exported as `SqlTransaction<TSchema>`). The outer
+handle is a pool, so a query on it runs on another connection, outside the
+transaction. To nest, call `tx.transaction(...)`, which takes a savepoint.
 
 ### `transactionSync(db, fn)`, where `db.transaction()` **is** right
 
-Everything above is downstream of the callback being asynchronous. Take the
-promise away and `bun:sqlite`'s wrapper is exactly correct, so `transactionSync`
-delegates to drizzle's own `db.transaction()` rather than issuing statements
-itself: one native transaction, no `BEGIN` strings, no queue, no promise.
+With a synchronous callback, `bun:sqlite`'s own transaction works correctly.
+`transactionSync` uses drizzle's `db.transaction()` directly: one native
+transaction, with no queue and no promise.
 
 ```ts
 const total = transactionSync(this.db, (tx) => {
@@ -585,15 +581,11 @@ constrained to a non-thenable, so an `async` callback, or one returning
 rollback that silently does nothing. Verified against Bun 1.3.14: with a
 synchronous callback the row is gone after a throw; with an async one it is not.
 
-One consequence of that constraint: `NotThenable`'s object branch is a weak type,
-so TypeScript rejects an object or array sharing no property with
-`{ then?: undefined }`. Returning a scalar, as above, is what it currently
-accepts.
+The check also rejects most returned objects and arrays. Return a scalar, such
+as a number or string, as above.
 
-The two compose. A `transactionSync` opened while an async `transaction()` is
-suspended across an `await` takes a **savepoint** rather than failing, because
-`bun:sqlite` branches on `Database.inTransaction`, which the outer `BEGIN` already
-set.
+You can mix the two. A `transactionSync` inside an async `transaction()` takes a
+**savepoint**, because `bun:sqlite` sees that a transaction is already open.
 
 ## Migrations
 
@@ -672,10 +664,10 @@ drizzle 0.45.2 has **no Bun-native MySQL driver.** Its only Bun entrypoints are
 are `mysql2` and `mysql-proxy`, and `mysql2` is a JavaScript reimplementation of a
 wire protocol Bun already speaks, so it is banned.
 
-`drizzle-orm/mysql-proxy` is the way through: drizzle's MySQL dialect with the
-transport left as a callback, and `Bun.SQL` supplying the transport. drizzle owns
-the SQL generation and the schema, Bun owns every byte of I/O, and nothing pulls in
-`mysql2`.
+Use `drizzle-orm/mysql-proxy` instead. It is drizzle's MySQL dialect with the
+transport left to a callback, and `Bun.SQL` can be that transport. drizzle
+generates the SQL and owns the schema, Bun does all the I/O, and `mysql2` is
+never installed.
 
 A working `DbOptions` for it is in **`examples/databases/src/mysql/driver.ts`**:
 about forty lines, needing **no change to the package**.
@@ -685,18 +677,16 @@ ordering, updates, deletes, aggregates, `$returningId()` single and multi-row,
 inner and left joins, `placeholder()` prepared statements, and the `mysql-proxy`
 migrator.
 
-The adapter has four details to get right (positional rows via `.values()`,
-SELECTs arriving as `execute`, `insertId` in `rows[0]`, and naming the
-`adapter` so a `POSTGRES_URL` in the environment cannot redirect the url). Each is
-commented where it is handled in `driver.ts`; copy the file rather than
-rewriting it.
+Four details in the adapter matter: rows are read by position with `.values()`,
+SELECTs arrive as `execute`, `insertId` is in `rows[0]`, and the `adapter` is
+named so a `POSTGRES_URL` in the environment cannot redirect the connection.
+`driver.ts` comments each one. Copy the file instead of rewriting it.
 
-`mysql-proxy` also refuses `db.transaction()` outright, because a callback
-transport has no way to pin its statements to one connection. `Bun.SQL`'s
-`begin()` does have a way, so the example opens the transaction on the client and
-builds a second drizzle handle over the reserved socket. That is the one functional
-gap against drizzle's `mysql2` driver, and it costs an extra handle rather than
-costing correctness.
+`db.transaction()` does not work on `mysql-proxy`, because it cannot keep a
+transaction's statements on one connection. The example opens the transaction
+with `Bun.SQL`'s `begin()`, which reserves a connection, and builds a second
+drizzle handle over it. This is the only feature missing compared with drizzle's
+`mysql2` driver.
 
 One more, if you write a CLI or a seeder against MySQL: an in-flight `Bun.SQL`
 query on the **MySQL** adapter does not hold the event loop open. A script whose
@@ -722,14 +712,14 @@ import { asSqlite } from '@dunx/infra/db';
 asSqlite(connection).exec('pragma foreign_keys = on');
 ```
 
-It throws naming the backend it was handed, where `connection.raw as Database`
-would hand back a `Bun.SQL` client under the wrong type. There is no `asSql` twin:
-`Bun.SQL`'s surface is reachable through drizzle's own `sql` tag.
+`asSqlite` throws with the name of the backend it received. A cast such as
+`connection.raw as Database` would instead give you a `Bun.SQL` client typed as
+a `Database`. There is no `asSql`: use drizzle's `sql` tag to reach `Bun.SQL`.
 
-`onShutdown()` is concrete rather than abstract: the hook and the explicit call are
-one operation. `@dunx/core` shuts down in reverse construction order, and every
-repository depends on the drizzle handle which depends on the connection, so
-everything holding it has already drained by the time it closes.
+`onShutdown()` calls `close()`, so the shutdown hook and an explicit call do the
+same thing. `@dunx/core` shuts down in reverse construction order. Every
+repository depends on the drizzle handle, which depends on the connection, so
+they have all finished before the connection closes.
 
 ## Pagination
 
@@ -775,9 +765,8 @@ page({ query }: Input<typeof paged>): Promise<Page<Entry>> {
 Pass `meta.nextCursor` back as `?cursor=` to read forwards, and
 `meta.previousCursor` with `?direction=backward` to go the other way.
 
-Both type arguments are given above, and a generic wrapper needs them. `paginate`
-infers the row type from the table, so a base repository that pages a narrower
-select type gets the table's type back unless it says otherwise:
+In a generic wrapper, pass both type arguments. With only the table,
+`paginate` returns the table's full row type, even if you select fewer columns:
 
 ```ts
 // Infers the table's select type, not TSelect.
@@ -805,10 +794,8 @@ repeated, and a bulk insert produces exactly that.
 whatever `orderBy` names. It has to be unique together with the id column, which is
 what makes the seek deterministic.
 
-It takes anything with drizzle's `select()`, so both dialects and a transaction handle
-fit - it `await`s the query builder rather than calling `.all()`, because drizzle's
-builders are thenable on the synchronous `bun:sqlite` driver as well as the
-asynchronous `Bun.SQL` one.
+`db` can be either dialect or a transaction handle; anything with drizzle's
+`select()` works, on both the synchronous and asynchronous drivers.
 
 ### Paginating something that is not a table
 
@@ -860,11 +847,10 @@ UserB.table; // decorator's return type is C & { table }
 TC39 decorators are **type-transparent** in TypeScript: the decorator's return
 type does not become the declaration's type.
 
-drizzle's whole value is the table object's _type_ carrying column types into
-every query, so a decorator could build a working table at runtime while every
-query degraded to `unknown`. Recovering the types would mean hand-writing a
-mapped type mirroring drizzle's `BuildColumns`, a second source of truth that
-drifts from the first.
+drizzle gets column types into every query through the table object's _type_. A
+decorator could build a working table at runtime, but every query would be typed
+`unknown`. Getting the types back would need a hand-written copy of drizzle's
+`BuildColumns` mapped type, which would drift from drizzle's own.
 
 ## Related
 

@@ -6,9 +6,8 @@ module bound a provider, why boot fails. `@dunx/mcp` answers those over the
 [Model Context Protocol](https://modelcontextprotocol.io) so the agent can ask
 instead of grepping.
 
-It answers before the app exists too. Three of its tools carry the written guide,
-the smallest working app, and the feature catalogue inside the package, so an agent
-that has been asked to adopt dunx has something to read.
+You can run it before you have an app. Three tools need no app: one serves this
+guide, one the smallest working app, and one the feature catalogue.
 
 ```bash
 bunx @dunx/mcp                        # the guide, the starter, the catalogue
@@ -31,10 +30,10 @@ bunx @dunx/mcp ./src/app.module.ts    # those, plus the readers for your app
 The entry is optional. Without one the server starts with the three tools that
 need no app, which is the state a project has before dunx is installed in it.
 
-Point it at the file that declares your root module once there is one. No naming
-convention applies: `@Module` leaves a marker, so a module exported only by name is
-found on its own. `bunx @dunx/create-app` scaffolds a module exported exactly this
-way.
+Once you have an app, point it at the file that declares your root module. The
+export needs no particular name: `@Module` marks the class, so a module exported
+only by name is still found. `bunx @dunx/create-app` scaffolds a module exported
+this way.
 
 `default` and `root` win if present. `--export=<name>` settles a file that
 declares several. The path is resolved with `Bun.resolveSync`, so anything
@@ -121,12 +120,10 @@ whether it would boot, without returning the graph:
 }
 ```
 
-`unresolvedDependencies` is listed rather than counted: each entry is a boot
-error naming a parameter. A constructor parameter whose type was erased - an
-interface, a primitive, a union, a type-only import - is recorded by
-`@dunx/transform` as `unresolved`. That is the same wart `emitDecoratorMetadata`
-has; dunx's transform does not carry it. The `typeOnly` case gets its own field
-because it has a one-line fix:
+`unresolvedDependencies` lists every constructor parameter the container cannot
+inject. Each one would fail boot. A parameter lands here when its type is erased
+at runtime: an interface, a primitive, a union, or a type-only import. A
+type-only import also gets a `typeOnly` field, because the fix is one line:
 
 ```json
 {
@@ -177,37 +174,31 @@ the tool accepts:
 Unknown argument: chapter. This tool takes topic, search. Call it again with one of those.
 ```
 
-`dunx_guide` takes `topic`, and this chapter calls the thing it returns a chapter,
-so `{ chapter: '06-validation' }` is the call an agent reaches for.
+`dunx_guide` takes `topic`, but the guide calls what it returns a chapter, so
+agents often send `{ chapter: '06-validation' }`.
 
-Read and discarded, that key left the tool with no arguments at all, which is the
-branch that returns the index: seventeen kilobytes answering a question nobody
-asked, with nothing to say it had happened. That is the silent `undefined`
-[`@dunx/transform`](./03-providers.md) refuses to ship for an erased constructor
-parameter.
+If the server ignored that key, the tool would see no arguments and return the
+whole index, seventeen kilobytes, with no sign that anything went wrong.
 
-A tool that declares no arguments stays permissive, because a stray key cannot
-change an answer that never depended on one.
+A tool that takes no arguments ignores unknown keys, since they cannot change
+its answer.
 
 ## Results are structured, which is what makes them cheap
 
-Every tool answers with an object, and the server sends it twice: serialised into
-a text block for a client that renders text, and as `structuredContent` for one
-that reads the structured channel MCP added in `2025-06-18`. A client that
-understands the second is not made to parse a string back into the object the
-server already had.
+Every tool returns an object, and the server sends it in two forms: a text block,
+and `structuredContent` (added to MCP in `2025-06-18`). A client that supports
+`structuredContent` reads the object directly.
 
-It is also the cheaper wire. Measured through Claude Code against
-`examples/full`, one `dunx_gateways` call reaching the model:
+The structured form costs the model fewer bytes. One `dunx_gateways` call against
+`examples/full`, measured through Claude Code:
 
 | Result                       | Bytes the model reads |
 | ---------------------------- | --------------------- |
 | `structuredContent` and text | 598                   |
 | Text alone                   | 1,354                 |
 
-The text block is indented so a person can read it, and indentation is what the
-model pays for. Given both, the client takes the structured one and serialises it
-flat.
+The text block is indented. When both are present, the client uses
+`structuredContent` and sends it to the model without indentation.
 
 ## Resources
 
@@ -218,9 +209,9 @@ becomes absolute.
 
 ## Starting a project with an agent
 
-An agent with the server wired up already has all of this: `dunx_start` for the
-rules, `dunx_scaffold` for the features and the starter files, `dunx_guide` for
-everything written. Two files are served over HTTP for an agent that does not:
+With the server wired up, an agent already has all of this: `dunx_start` for the
+rules, `dunx_scaffold` for the features and starter files, and `dunx_guide` for
+the written guide. For an agent without it, two files are served over HTTP:
 
 | URL                         | Holds                                                                   |
 | --------------------------- | ----------------------------------------------------------------------- |
@@ -249,10 +240,11 @@ routes exist" would open database connections, start queue workers, bind sockets
 and run every `onInit`. An agent asking a question about the code would end up
 running the code against whatever environment happened to be configured.
 
-Reading costs none of that. `discoverRoutes` and `discoverGateway` each walk a
-prototype chain, and `Object.create(Controller.prototype)` is that chain with
-nothing behind it: `instance.constructor` still resolves to the class, every
-method stays reachable, and no constructor has to exist.
+Reading the code has none of those effects. `discoverRoutes` and
+`discoverGateway` walk a prototype chain, and
+`Object.create(Controller.prototype)` gives that chain without running a
+constructor: `instance.constructor` still resolves to the class and every method
+is reachable.
 
 The container graph comes from the same functions the container reads it with:
 `collectModules`, `readControllers`, `readDeps` and `describeToken`.
@@ -266,9 +258,9 @@ so the cost is visible at the call site rather than hidden inside every answer.
 
 The questions it answers better than a search:
 
-- **"What is the unauthenticated surface?"** `dunx_routes` with `publicOnly`, which
-  is `@Public()` resolved through class-level and method-level metadata rather than
-  grepped for.
+- **"What is the unauthenticated surface?"** `dunx_routes` with `publicOnly`. It
+  reads `@Public()` from both class-level and method-level metadata, which a grep
+  cannot combine.
 - **"Why does boot fail?"** `dunx_providers` with `unresolvedOnly`, giving the
   registrations that would throw, with the parameter named.
 - **"Who binds this token?"** `dunx_providers` with `token`, which reports the module

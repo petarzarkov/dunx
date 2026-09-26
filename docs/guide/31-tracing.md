@@ -42,9 +42,9 @@ export class AppModule {}
 | `Tracer`               | Core's third always-bound contract, after `Logger` and `RequestContext`       |
 | `OtelModule`           | A decorated class that binds `Tracer` to `OtelTracer` for the whole graph     |
 
-The API is a peer because a provider registered through an older copy of it
-silently drops spans started through a newer one. Keep one copy: `bun why
-@opentelemetry/api`.
+Keep exactly one copy of `@opentelemetry/api` installed. If a provider is
+registered through one copy and spans are started through another, newer copy,
+those spans are dropped without an error. Check with `bun why @opentelemetry/api`.
 
 `@dunx/core/otel` is its own subpath. The root entry never imports the API, so an
 app without it installed boots unchanged, compiled binaries included.
@@ -106,10 +106,12 @@ export class PaymentsService {
 }
 ```
 
-Without `OtelModule` this is the `NoopTracer`: the callback runs, and `span` is
-one shared object that records nothing. A span started straight from
-`@opentelemetry/api` inside a handler also parents to dunx's server span, across
-`await`, timers, `bun:sqlite` and `Bun.SQL`.
+Without `OtelModule`, `Tracer` is the `NoopTracer`. The callback still runs, and
+`span` is a shared object that records nothing.
+
+With `OtelModule`, a span you start directly from `@opentelemetry/api` inside a
+handler becomes a child of dunx's server span. This holds across `await`, timers,
+`bun:sqlite` and `Bun.SQL`.
 
 ## Log lines join their span
 
@@ -136,13 +138,14 @@ A carrier the caller set is left alone, so forwarding a message or setting
 
 ### Queues
 
-The job carrier is the JSON object `bullmq-otel` writes, so a job crosses between
-a dunx app and one using bullmq's own telemetry with its parent intact. dunx does
-not set bullmq's `telemetry` option.
+dunx stores the trace context on a job in the same JSON format `bullmq-otel`
+uses. So a job sent between a dunx app and an app using bullmq's own telemetry
+keeps its parent span. dunx does not set bullmq's `telemetry` option.
 
-A handler under `isolation: 'process'` runs in the fork, which reads the carrier
-from `job.opts`. The fork is a separate process with its own global provider, so
-the processor file registers an SDK and its module imports `OtelModule`:
+A handler with `isolation: 'process'` runs in a separate process, which reads the
+trace context from `job.opts`. That process has its own global tracer provider.
+So the processor file must register an OpenTelemetry SDK, and its module must
+import `OtelModule`:
 
 ```ts
 // src/jobs.processor.ts

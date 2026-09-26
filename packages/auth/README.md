@@ -3,10 +3,10 @@
 [Better Auth](https://better-auth.com) for
 [dunx](https://github.com/petarzarkov/dunx).
 
-This package wires better-auth into dunx: a module that builds the instance
-from your `ConfigService`, five routes that mount its handler, a guard that
-composes with the `@Public()` and `@Roles()` metadata `@dunx/http` already
-carries, and two adapters that let it drive Bun's own APIs.
+This package connects better-auth to dunx. It gives you a module that builds the
+better-auth instance from your `ConfigService`, five routes that mount its
+handler, a guard that respects `@dunx/http`'s `@Public()` and `@Roles()`, and
+two adapters that run better-auth on Bun's own APIs.
 
 better-auth handles authentication itself; this package does not reimplement
 it.
@@ -72,9 +72,10 @@ The [Authentication guide](../../docs/guide/17-authentication.md) is canonical.
 
 ## Notes
 
-- dunx ships no schema for better-auth's tables: they belong to better-auth
-  and change with its plugins. `bunx @better-auth/cli generate` writes them.
-  Export them under the singular model names the adapter looks up.
+- dunx does not ship a schema for better-auth's tables, because better-auth
+  owns them and they change with its plugins. Generate them with
+  `bunx @better-auth/cli generate`, and export them under the singular model
+  names the adapter looks up.
 - Under `setGlobalPrefix`, `basePath` is what better-auth matches. `mountAt`
   is where the route is mounted. Omitting `mountAt` with a non-default
   `basePath` is a boot error.

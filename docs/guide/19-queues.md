@@ -1,10 +1,8 @@
 # bullmq over Redis
 
-**bullmq is the queue.** What `@dunx/infra/queue` contributes is the four things
-bullmq has no opinion about: where a handler lives, how it is found, how it is
-injected, and when it stops. dunx adds no retry policy, no backoff, no rate
-limiter and no scheduler: those are bullmq's, and a second implementation of
-them would be a worse one.
+`@dunx/infra/queue` runs bullmq jobs on dunx services.
+It decides where a handler lives, how it is found and injected, and when it
+stops. Retries, backoff, rate limits and scheduling come from bullmq itself.
 
 ```bash
 bun add bullmq ioredis
@@ -16,9 +14,8 @@ installs neither. `ioredis` is there for bullmq's sake rather than dunx's: see
 
 ## Choosing a backend
 
-dunx ships two queue backends and neither replaces the other. This page is one;
-the other is [RabbitMQ over AMQP](./20-message-brokers.md). The test is who owns
-the failure.
+dunx has two queue backends: bullmq, on this page, and
+[RabbitMQ over AMQP](./20-message-brokers.md). Pick by what you need:
 
 | Ask                                                        | Reach for                                     |
 | ---------------------------------------------------------- | --------------------------------------------- |
@@ -84,9 +81,9 @@ What follows from that:
   read a prototype chain from until it has been built. Put handlers on a class
   provider.
 
-An arriving job whose name no handler claims fails with a message saying what that
-worker _does_ serve. The shape of that bug is usually a worker deployed ahead of
-the handler that serves it, and bullmq retries under the job's own `attempts`.
+A job whose name no handler claims fails, and the error lists the names that
+worker does handle. This usually means the worker was deployed before the code
+with the handler. bullmq retries the job under its own `attempts`.
 
 ## Setup
 
@@ -134,10 +131,9 @@ module is configured rather than on first connect.
 | `processor`         | none                                                        | Absolute path bullmq forks into for a `background` queue  |
 | `isolation`         | `'process'`                                                 | `'thread'` runs a `background` queue on a worker thread   |
 
-`worker` and `defaultJobOptions` are **passthroughs**. `concurrency`,
+`worker` and `defaultJobOptions` are passed to bullmq unchanged. `concurrency`,
 `limiter`, `lockDuration`, `stalledInterval`, `attempts`, `backoff`,
-`removeOnComplete` and the rest are bullmq's own options, documented by bullmq.
-Restating them here would only produce a staler copy.
+`removeOnComplete` and the rest are bullmq's options; see bullmq's docs for them.
 
 ### Counting jobs
 
@@ -154,11 +150,11 @@ times both. Inject it and call `snapshot()` for a `QueueStatsReport`: per
 `publishErrors`, with a `HistogramSnapshot` for each duration. `reset()` clears
 them.
 
-Only the publish side is always this container's. A handler reaches the counters
-where the dispatcher is built here, meaning `consume: true` in this process; a
-`background: true` job and a `WorkerFactory` process each run in a container of
-their own with their own `QueueMetrics`. [Metrics](./24-metrics.md) covers reading
-the report and the cap on the series.
+Publishes are always counted in the process that publishes. Handler runs are
+counted here only when this process consumes with `consume: true`. A
+`background: true` job and a `WorkerFactory` process each run in their own
+container, with their own `QueueMetrics`. [Metrics](./24-metrics.md) covers
+reading the report and the limit on the number of series.
 
 ### Why `connection` is bounded by default
 
@@ -175,12 +171,12 @@ timer alive past `close()` and the process never exits. Verified at
 `maxRetries: 3`, where a full-example boot with no Redis survived `SIGTERM` for
 12 s. So `0` is the only default that both fails fast and lets the process die.
 
-The trade: **a worker set to `0` will not ride out a Redis blip.** Raise it if that
-matters more than a clean exit on a cold start against an absent Redis. They
-cannot both be had until Bun clears the timer on `close()`.
+The cost: **with `0`, a worker does not reconnect after a short Redis outage.**
+Raise it if reconnecting matters more to you than exiting cleanly when Redis is
+missing at startup. You cannot have both until Bun clears the timer on `close()`.
 
-Neither of these is what the bounded default _cannot_ fix - see the two leaks
-in [Read this before you deploy it](#read-this-before-you-deploy-it), which survive `maxRetries: 0` entirely.
+`maxRetries: 0` does not fix two other shutdown hangs; see
+[Read this before you deploy it](#read-this-before-you-deploy-it).
 
 ### The connection bullmq builds for itself is bounded too
 
@@ -188,25 +184,26 @@ bullmq does not keep the client it is handed. A `Worker`'s blocking connection i
 `connection.duplicate()`, and every reconnect rebuilds one, both with
 `new (this.raw.constructor)(this.raw.url)`.
 
-That drops the options, so `maxRetries: 0` would have applied to the first socket
-only. `Bun.RedisClient` also has **no `url` property** on Bun 1.3.14, so it
-dropped the url too: the replacement resolved Bun's default (`$VALKEY_URL`,
-`$REDIS_URL`, `valkey://localhost:6379`), and a worker pointed at a remote Redis
-would block-poll localhost and never see a job.
+With a plain `Bun.RedisClient`, that rebuilt client would lose two things:
 
-`@dunx/infra/queue` hands bullmq a `Bun.RedisClient` **subclass** that carries the
-url and reapplies the options, so every one of those reconstructions comes out the
-same as the first. Nothing to configure; it is how `QueueConnection` builds a
-client.
+- **Its options.** `maxRetries: 0` would apply only to the first socket.
+- **Its url.** `Bun.RedisClient` has **no `url` property** on Bun 1.3.14, so the
+  new client would use Bun's default (`$VALKEY_URL`, `$REDIS_URL`,
+  `valkey://localhost:6379`). A worker set up for a remote Redis would poll
+  localhost and never see a job.
+
+`QueueConnection` hands bullmq a `Bun.RedisClient` **subclass** that keeps the
+url and the options, so every rebuilt client matches the first. There is nothing
+to configure.
 
 ## Read this before you deploy it
 
 One known defect.
 
-**A process that attempted a queue operation against a Redis it could not reach
-does not exit on `SIGTERM`.** It is **two** upstream leaks, one in Bun and one in
-bullmq, and neither is reachable from userland. Bisected a layer at a time, with
-`connectionTimeout: 2000, maxRetries: 0` throughout:
+**A process that tried a queue operation while Redis was unreachable does not
+exit on `SIGTERM`.** The cause is two upstream bugs, one in Bun and one in
+bullmq, and app code cannot work around either. Each layer tested on its own,
+with `connectionTimeout: 2000, maxRetries: 0`:
 
 | server                      | `Bun.RedisClient` | bullmq's adapter | a bullmq `Queue` |
 | --------------------------- | ----------------- | ---------------- | ---------------- |
@@ -214,25 +211,24 @@ bullmq, and neither is reachable from userland. Bisected a layer at a time, with
 | refused (nothing listening) | exits 0           | **never exits**  | **never exits**  |
 | black-holed (SYN dropped)   | **never exits**   | **never exits**  | **never exits**  |
 
-The black-holed row is Bun's: a connect that never completes keeps a handle past
-`close()`, and no client option changes it. The refused row is bullmq's: its
-adapter runs a `setTimeout` reconnect chain and both `disconnect()` and `quit()`
-return early once the connection has dropped, which is exactly when one is
-pending.
+The black-holed row is a Bun bug. A connect that never completes keeps the
+process alive after `close()`, whatever the client options.
+
+The refused row is a bullmq bug. Its adapter schedules reconnects with
+`setTimeout`. Once the connection has dropped, `disconnect()` and `quit()` return
+early, so that pending reconnect is never cancelled.
 
 An app that imports `QueueModule` without publishing is unaffected, and so is a
 healthy deployment. What hangs is a process that served a queue route while Redis
 was unreachable.
 
-It **serves correctly throughout**, answering 503 in single-digit milliseconds,
-so this is a shutdown defect rather than an availability one, and whatever
-supervises the process will `SIGKILL` it.
+Requests are still **served correctly**, with a 503 in single-digit
+milliseconds. Only shutdown is affected, and your process supervisor will
+`SIGKILL` it.
 
-Earlier versions of this guide also told you to **pin ioredis 5**. That advice was
-wrong and has been withdrawn: ioredis 6 did not remove `ioredis/built/utils`, both of
-bullmq's builds import it, and Bun runs the CJS one. Any ioredis from 5.0.0 up works.
-The measurement is in [architecture/queues.md](../architecture/queues.md),
-"Not pinning ioredis 5".
+Earlier versions of this guide said to **pin ioredis 5**. That was wrong: any
+ioredis from 5.0.0 up works, including 6. The measurement is in
+[architecture/queues.md](../architecture/queues.md), "Not pinning ioredis 5".
 
 ## Publishing and consuming are separate decisions
 
@@ -267,10 +263,12 @@ runs in the right order.
 export class JobsModule {}
 ```
 
-A broker that is down degrades rather than failing boot: the runner logs at `error`
-that the process is serving but consuming nothing. A sandbox child sets
-`DUNX_JOB_WORKER`, and the runner refuses to open workers when it sees it, so a
-processor file may import a `consume: true` module without forking forever.
+If Redis is down, boot still succeeds. The runner logs an `error` saying the
+process is serving but not consuming.
+
+A processor file can import a `consume: true` module safely. The forked
+`background` child has `DUNX_JOB_WORKER` set, and the runner opens no workers
+when it is set, so the child does not fork itself again.
 
 `consume: true` with no `@JobHandler` anywhere in the graph is a boot error: a
 process that consumes nothing is one nobody notices. `consume: 'if-any'` stands
@@ -280,10 +278,10 @@ lands several commits before the first handler. Two handlers claiming one
 
 ### Isolation is per handler, and per queue in effect
 
-`@JobHandler({ queue, name, background })` marks one handler. `background: true`
-makes bullmq fork the file named by `QueueModule.forRoot({ processor })` instead of
-calling a function in this process - the switch that keeps a CPU-bound handler off
-the loop serving requests.
+`@JobHandler({ queue, name, background })` marks one handler. With
+`background: true`, bullmq runs the job in a forked process from the file named by
+`QueueModule.forRoot({ processor })`. Use it to keep a CPU-heavy handler off the
+event loop that serves requests.
 
 Two things about it are easy to get wrong.
 
@@ -296,10 +294,10 @@ Two things about it are easy to get wrong.
 `isolation` is **not** a `@JobHandler` option. It is
 `QueueModule.forRoot({ isolation })`, and it defaults to `'process'`. Keep it there:
 
-- A fork is a fresh Bun process. It reads `bunfig.toml`, so the transform preload
+- A fork is a new Bun process. It reads `bunfig.toml`, so the transform preload
   runs and constructor injection works in the child.
-- `'thread'` enters through bullmq's own prebuilt worker entry, where a preload
-  cannot match a `.ts` file. The first provider with a constructor parameter then
+- `'thread'` starts from bullmq's prebuilt worker file, where the preload does not
+  apply to your `.ts` files. The first provider with a constructor parameter then
   fails at boot.
 
 `'thread'` is usable only against a tree whose dependencies were recorded at build
@@ -315,8 +313,9 @@ import { JobsProcessorModule } from './jobs.processor.module.js';
 export default new JobProcessor(JobsProcessorModule).handle;
 ```
 
-`handle` is an arrow property rather than a method, because bullmq calls the export
-bare. The child builds its container on the first job and reuses it.
+Export `.handle` as shown. bullmq calls it as a plain function, and it still
+works because it is an arrow function. The first job builds the child's
+container, and later jobs reuse it.
 
 `JobProcessor` takes a second argument, `JobProcessorOptions`:
 
@@ -393,9 +392,9 @@ await worker.closed;
 { "scripts": { "worker": "bun run src/worker.ts" } }
 ```
 
-The root module it is handed may be the app's own or a narrower one that leaves
-the controllers out. It is a normal dunx container either way, so a handler gets
-the same constructor injection a controller does.
+Pass the app's root module or a smaller one without the controllers. Either way
+it builds a normal dunx container, and handlers get constructor injection like
+controllers do.
 
 **`create` discovers and validates; `start` is what opens connections.** So a
 wiring mistake fails before anything consumes, and `worker.jobs` can be inspected
@@ -408,10 +407,9 @@ in a test with no server running:
 | A name in `queues` no handler claims | `ERR_QUEUE_NO_HANDLERS`, naming both what is missing and what was found |
 | Two handlers on one `(queue, name)`  | `ERR_QUEUE_DUPLICATE_HANDLER`                                           |
 
-The `QueueModule` check reads the **module graph** rather than the container:
-`QueueOptions` is a class whose constructor argument is optional, so an unbound
-container would self-bind it and hand back defaults. A worker silently pointed at
-`localhost` is worse than one that will not boot.
+The `QueueModule` check looks at the imported modules. Without it, a missing
+`QueueModule` would not be noticed: `QueueOptions` would be created with its
+defaults, and the worker would quietly connect to `localhost`.
 
 `WorkerApp` carries `jobs` (every handler after the filter), `queues` (what this
 process will consume), `start()`, `shutdown()`, `enableShutdownHooks()`, `closed`
@@ -423,9 +421,9 @@ and `get(token)`.
 const worker = await WorkerFactory.create(AppModule, { queues: ['emails'] });
 ```
 
-That is how one queue gets its own process and its own concurrency. A name in that
-list that no handler claims is a boot error, rather than a process that quietly
-serves only the queues that were spelled right.
+Use this to give one queue its own process and its own concurrency. A name in
+`queues` that no handler claims fails at boot, so a misspelled queue name is
+caught.
 
 ## Serving and consuming in one process
 
@@ -444,13 +442,12 @@ await app.listen(3000);
 await consumer.start();
 ```
 
-`root` is the same module ref the app was built from. The handlers are found by
-inspecting it, and resolved out of the container that is already running.
+Pass the same root module the app was built from. The handlers are found in it
+and resolved from the running container.
 
-It returns a **`QueueConsumer`**, the consuming half of
-`WorkerFactory.create` with no `App` of its own: `jobs`, `queues`, `start()` and
-`stop()`. `create` now wraps the same class, so the two paths share their
-behaviour rather than merely resembling each other.
+It returns a **`QueueConsumer`** with `jobs`, `queues`, `start()` and `stop()`.
+This is the same class `WorkerFactory.create` uses internally, without an `App`
+of its own, so both behave the same.
 
 `attach` validates with exactly the same rules as `create`. No handlers, or a
 named queue nothing consumes, are both boot errors. The difference is what happens
@@ -464,9 +461,8 @@ await consumer.stop();
 await app.shutdown();
 ```
 
-`consumer.stop()` closes the workers and **nothing else**. It is idempotent, and
-it waits for whatever is mid-flight, because `close()` without `force` stops
-fetching and waits for what is already running.
+`consumer.stop()` closes the workers and **nothing else**. Calling it twice is
+safe. It stops fetching new jobs and waits for running jobs to finish.
 
 **Nothing can enforce that ordering.** Core's `App` exposes no hook to register
 against, so `attach` cannot arrange to run first, and a worker still running when
@@ -512,9 +508,8 @@ first, because everything else needs it, so it goes last.
 
 ## The ioredis boundary
 
-dunx does not use `ioredis` in its own code, because `Bun.RedisClient` exists.
-bullmq needs _a_ Redis client. The resolution is not a compromise, and it was
-found by measuring rather than by assuming.
+dunx's own code uses `Bun.RedisClient`, not `ioredis`. bullmq still needs
+`ioredis` installed, for the reasons below.
 
 **Every byte of queue traffic goes through `Bun.RedisClient`.** bullmq accepts
 either a connection description it builds a client from, or an already-built
@@ -523,30 +518,30 @@ client implementing its `IRedisClient` interface, and bullmq 6 ships
 dunx neither imports nor constructs ioredis, and `dist/` contains no reference to
 it.
 
-Verified on bullmq 6.0.5, Bun 1.3.14 and Redis 8.4.0, over that adapter, in 0.5 s:
-concurrency 5 honoured across 20 jobs, `attempts: 2` with fixed backoff retrying a
-throwing handler exactly once, a delayed job reporting state `delayed` and
-arriving, and `worker.close()` waiting 244 ms for a 250 ms handler rather than
-dropping it.
+Tested with that adapter on bullmq 6.0.5, Bun 1.3.14 and Redis 8.4.0 (the run
+takes 0.5 s):
+
+- concurrency 5 is respected across 20 jobs
+- `attempts: 2` with fixed backoff retries a throwing handler exactly once
+- a delayed job reports state `delayed` and then runs
+- `worker.close()` waits 244 ms for a 250 ms handler instead of dropping it
 
 Three findings shaped the code:
 
-- **ioredis is a load-time requirement of bullmq, in both its builds.**
-  `utils/index` and `classes/redis-connection` statically import `ioredis` and
-  `ioredis/built/utils`, so `import { Queue } from 'bullmq'` throws
-  `Cannot find module` without it, despite bullmq 6 declaring `ioredis` an
-  _optional_ peer and shipping three other backends. That is the only reason it is
-  listed as an optional peer of `@dunx/infra`. If bullmq makes that import lazy,
-  the entry disappears.
+- **bullmq cannot load without ioredis, in either of its builds.** It imports
+  `ioredis` and `ioredis/built/utils` at the top of `utils/index` and
+  `classes/redis-connection`, so `import { Queue } from 'bullmq'` throws
+  `Cannot find module` without it. This is true even though bullmq 6 lists
+  `ioredis` as an _optional_ peer and ships three other backends. It is the only
+  reason `ioredis` is an optional peer of `@dunx/infra`.
 
-  It is optional in the same sense `bullmq` is - needed if and only if you use
-  `/queue`, so `bun add bullmq ioredis` installs the pair. Any version
-  from 5.0.0 works, because that is the range bullmq itself declares and dunx has
-  no opinion beyond it.
+  You need it only if you use `/queue`, the same as `bullmq`, so
+  `bun add bullmq ioredis` installs both. Any version from 5.0.0 works, which is
+  the range bullmq declares.
 
-- **bullmq does not close a connection it was handed.** Measured with
-  `CLIENT LIST`: four connections live, three after `worker.close()` plus
-  `queue.close()`. It closed only the duplicate it created itself.
+- **bullmq does not close a connection you give it.** `CLIENT LIST` showed four
+  connections, and three were still open after `worker.close()` and
+  `queue.close()`. bullmq closed only the copy it created.
   `QueueConnection.onShutdown` closes the rest.
 - **Closing one afterwards emits `error` on an emitter with no listener**, because
   bullmq detaches its own handler on close and Node's `EventEmitter` throws for an
@@ -559,20 +554,19 @@ Three findings shaped the code:
   that order, because `disconnect()` skips the close for a client that never
   finished connecting.
 
-One client is opened **per bullmq object** rather than one shared, because a
-`Worker` blocks on `BZPOPMIN` and bullmq duplicates whatever it is given to get a
-connection it may block on. Sharing would only add a duplicate.
+Each bullmq object gets **its own client**. A `Worker` blocks on `BZPOPMIN`, and
+bullmq copies any client it is given to get one it can block on, so sharing one
+client would save nothing.
 
 `@dunx/infra/redis` is untouched and unshared: a queue's sockets are its own. See
 `packages/infra/README.md` for the Redis client itself.
 
 ### The subpath is the only way in
 
-`@dunx/infra/queue` is **not re-exported from the package barrel**, and neither
-are `/amqp`, `/db` and `/pagination`, for the same reason: each reaches an
-optional peer through a static import. `src/index.ts` re-exporting this one would
-put bullmq's static `ioredis` import behind `import '@dunx/infra'` for every
-consumer, queue or no queue.
+`@dunx/infra/queue` is **not exported from `@dunx/infra`** itself, and neither
+are `/amqp`, `/db` and `/pagination`. Each one imports an optional peer at load
+time. If `@dunx/infra` exported this one, every `import '@dunx/infra'` would need
+bullmq and ioredis installed, even in an app with no queues.
 
 ## Testing with no Redis running
 
@@ -629,9 +623,9 @@ Serving that as an admin-only JSON controller takes about sixty lines.
 `getWorkers()` **works**, and was long believed not to. It reported `[]` on Bun
 even while workers drained jobs.
 
-`QueueConnection` wrapped `duplicate` and called it with no arguments, dropping
-the `{ connectionName }` bullmq's Bun adapter names a connection through. One
-line, fixed; `CLIENT SETNAME` runs and the worker appears.
+The cause was that `QueueConnection` dropped the `{ connectionName }` argument
+bullmq passes to `duplicate`, so the connection was never named. That is fixed.
+`CLIENT SETNAME` now runs and the worker is listed.
 
 ## Waiting for a job to finish
 
@@ -708,9 +702,8 @@ try {
 
 ## Everything `@dunx/infra/queue` exports
 
-The tokens above are what an app injects. The rest is what a test or a dashboard
-of your own reaches for, and it is listed here so nothing is reachable only by
-reading the source.
+An app usually injects only the tokens above. The rest are for tests and custom
+dashboards.
 
 | Export                                                       | Kind           | For                                                                 |
 | ------------------------------------------------------------ | -------------- | ------------------------------------------------------------------- |
@@ -735,8 +728,8 @@ reading the source.
 
 ## Related
 
-- [RabbitMQ over AMQP](./20-message-brokers.md), the other backend, for a message
-  whose consumers this process does not know about
+- [RabbitMQ over AMQP](./20-message-brokers.md), the other backend, for messages
+  consumed by other services
 - [Configuration](./12-configuration.md) for `forRootAsync` and `AppConfigService`
 - [Logging](./13-logging.md), which the worker uses for job completion and failure
 - [Metrics](./24-metrics.md) for reading `QueueMetrics`

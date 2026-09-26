@@ -1,7 +1,7 @@
 # First steps
 
-This page scaffolds an application, explains every file in it, and then adds a
-route, a service and a test. It assumes Bun 1.4 or newer and nothing else.
+You will scaffold an app, walk through each file, then add a route, a service
+and a test. You need Bun 1.4 or newer.
 
 ## Scaffold
 
@@ -52,8 +52,8 @@ template never goes stale between releases.
 
 ## Choosing features
 
-The minimal template is five files and one route: small enough to read, thin
-enough to start from. Anything more is composed from the list:
+The minimal template is five files and one route. Pick features from the list to
+add more:
 
 ```
 ? Features  3 chosen, 1 pulled in
@@ -72,9 +72,9 @@ Created my-api in my-api/
   database came along as a requirement
 ```
 
-`◉` is chosen, `◈` is pulled in by something else you chose, `○` is neither.
-`↑` `↓` move, `k` and `j` do the same, `a` takes everything and `n` clears it.
-Ctrl+C stops without writing.
+`◉` means chosen, `◈` means required by another feature you chose, and `○`
+means not included. Move with `↑` and `↓` (or `k` and `j`). `a` selects
+everything and `n` clears the selection. Ctrl+C quits without writing files.
 
 The set:
 
@@ -167,9 +167,8 @@ There are two `preload` entries because Bun's test runner reads its own. The
 top-level one covers `bun run start` and `bun src/main.ts`; the `[test]` one
 covers `bun test`. Miss the second and your app runs but your suite does not.
 
-Without the plugin, boot fails with a message quoting the snippet above. What the
-plugin writes, why `@dunx/core` does not register it on import, and the
-`Bun.build` form for a production build are in
+Without the plugin, boot fails and the error message shows the snippet above. For
+using it in a `Bun.build` production build, see
 [Providers](./03-providers.md#how-constructor-injection-works).
 
 ### `package.json`
@@ -266,10 +265,10 @@ specifier is what the emitted declaration would carry, and an extensionless one
 fails to resolve for consumers on `node16` or `nodenext`. Under this setting it
 is a compile error.
 
-`verbatimModuleSyntax` is why type-only imports must say so: `import type { Input }`.
-It is also, indirectly, a DI hazard, and [Providers](./03-providers.md) covers
-it: a constructor parameter whose type came in through a type-only import has no
-runtime value to record, so the container cannot resolve it.
+`verbatimModuleSyntax` requires type-only imports to use `import type { Input }`.
+Do not use `import type` for a class you inject: it has no runtime value, so the
+container cannot resolve that constructor parameter. See
+[Providers](./03-providers.md).
 
 ### `src/main.ts`
 
@@ -298,10 +297,9 @@ that exists is an app that booted.
 own list to change that. On a signal, the server stops first, then every provider
 with an `onShutdown` method runs in reverse construction order.
 
-`app.listen(3000)` builds the `Bun.serve` route table and binds. This is the
-point of no return: `setGlobalPrefix`, `use`, `set` and `enableCors` all throw
-afterwards, since the route table and the middleware chain are folded into one
-closure per route when the server binds.
+`app.listen(3000)` builds the `Bun.serve` route table and starts the server.
+After this, `setGlobalPrefix`, `use`, `set` and `enableCors` all throw, because
+the routes and middleware are fixed when the server starts.
 
 It returns the URL with a trailing slash, so the log line concatenates
 `greetings` directly.
@@ -328,9 +326,8 @@ export class AppModule {}
 `providers` are registered identically; the split exists so the HTTP adapter knows
 which constructed instances to scan for routes.
 
-Note that a bare class in either list is shorthand for binding it to itself. There
-is no `provide(GreetingsService, { useClass: GreetingsService })` to write for the
-ordinary case. [Modules](./04-modules.md) covers `imports`, `exports`, and how
+A bare class in either list binds the class to itself, so you do not write
+`provide(GreetingsService, { useClass: GreetingsService })`. [Modules](./04-modules.md) covers `imports`, `exports`, and how
 ordering works.
 
 ### `src/greetings.service.ts`
@@ -357,10 +354,10 @@ export class GreetingsService implements OnInit {
 A plain class. No decorator, no registration boilerplate. Listing it in a module's
 `providers` is what makes it injectable.
 
-`Logger` in the constructor is the entire dependency injection story. Nothing in
-this app bound `Logger` and it still resolves. `AppFactory.create` offers a
-default binding for `Logger` and `RequestContext` after every module's. A module
-that binds either one wins, and an app that binds neither still gets one.
+Declaring `Logger` in the constructor is all it takes to inject it. Nothing in
+this app binds `Logger`, and it still resolves: `AppFactory.create` binds a
+default `Logger` and `RequestContext` after all your modules. If a module binds
+either one, the module's binding is used.
 
 The default is `ConsoleLogger`, which writes one JSON line per entry and reaches
 for no dependency. It performs no sanitizing, masking or rotation, so swapping in
@@ -439,9 +436,8 @@ Nothing is faked. `Bun.serve` binds in about a millisecond, and a fake would onl
 be able to prove the parts of the request path dunx wrote rather than the parts
 Bun owns: routing, params, method dispatch, upgrades.
 
-`modules` takes one module or several; they become the `imports` of one synthetic
-root, so you do not have to write a fixture module. Request logging is off unless
-you ask for it, because a suite printing one JSON line per assertion helps nobody.
+`modules` takes one module or several, so you do not need a separate test
+module. Request logging is off in tests unless you turn it on.
 
 `server.json(path)` returns `{ status, headers, body }` in one await. `server.request()`
 gives you the raw `Response` for bytes, HTML or a header assertion. `server.close()`
@@ -449,10 +445,10 @@ is `app.shutdown()`: it stops the server, then tears the container down.
 
 ### `AGENTS.md` and `CLAUDE.md`
 
-`AGENTS.md` states this app's layout, its commands, and the rules dunx fails at boot
-over: no `@Injectable()` to add, `.js` on relative imports, a `import type` at an
-injection site being an error rather than an `undefined`. A composed app also lists
-the features it carries and the services they want running.
+`AGENTS.md` describes this app's layout and commands, and the rules that make dunx
+fail at boot: do not add `@Injectable()`, put `.js` on relative imports, and do not
+use `import type` for an injected class. An app generated with features also lists
+those features and the services they need running.
 
 `CLAUDE.md` is four lines pointing at it, so both filenames find the same
 instructions and there is one file to edit.
@@ -579,14 +575,14 @@ recursively, so `AuditService` is built before `GreetingsService` regardless of
 where it appears in the list. What order does control is teardown, and
 [Modules](./04-modules.md) covers that.
 
-Forget to list `AuditService` and it still works here: an unbound class self-binds
-into the module that first asks for it. A second module injecting it is then a boot
-error, because the class now belongs to the first module's scope and that module
-does not export it. List it in the module that owns it.
+If you forget to list `AuditService`, this app still works: a class no module lists
+is registered in the module that first asks for it. If a second module then
+injects it, boot fails, because the first module does not export it. List it in
+the module that owns it.
 
-That convenience has two sharp edges. A typo in a module's `providers` list goes
-uncaught, and an abstract class that is injected but never bound gets constructed
-into a useless object rather than erroring.
+This has two side effects. A typo in a module's `providers` list is not caught.
+And an abstract class that is injected but never bound is constructed as-is
+instead of failing.
 [Providers](./03-providers.md) covers both.
 
 ## Next

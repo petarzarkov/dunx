@@ -72,17 +72,16 @@ live `Bun.serve` server at 14.7 ns rather than counted.
 
 ### One series per route pattern
 
-`/users/1` and `/users/2` land on the one `/users/:id` series. The key is the
-route context dunx freezes when it builds the table, so there is no normalisation
-step and the series count is bounded by the handler count.
+`/users/1` and `/users/2` are counted in one `/users/:id` series. The pattern is
+fixed when the route table is built at boot, so nothing is normalised per request
+and there is at most one series per handler.
 
 Every path that matched nothing collapses into a single `(unmatched)` series per
 method. A 404's log line still names the concrete path it missed.
 
-A path a middleware **claims** is the exception: it matched no route, but
-something serves it, so it gets a series of its own under its path. That is what
-gives each RPC behind `@dunx/http/connect` its own row rather than filing every
-call with real misses. The claimed set is fixed at boot, so this stays bounded.
+A path that a middleware **claims** gets its own series, even though it matched
+no route. For example, each RPC behind `@dunx/http/connect` gets its own row.
+Claimed paths are fixed at boot, so the number of series stays bounded.
 
 An `ignore`d or `ignorePrefix`ed path **is** counted. That option is about log
 volume, and a health check polled every second is the clearest case of something
@@ -124,9 +123,9 @@ Timing happens at the driver dunx constructs. Drizzle's `logger` option cannot
 supply it: `logQuery` fires immediately before a statement runs and has no
 completion callback.
 
-For `bun:sqlite` the prepared statement's execute methods are wrapped, which is
-exact because they are synchronous. For `Bun.SQL` the lazy `Query`'s `then` is
-wrapped, so the measurement covers execution without starting it early.
+With `bun:sqlite`, dunx times the prepared statement's execute methods, which are
+synchronous. With `Bun.SQL`, it times the query's `then`, so a query still does not
+run until it is awaited.
 
 `errors` counts statements that threw or whose promise rejected. They stay in
 `count` as well.
@@ -137,9 +136,9 @@ Literals are replaced before the text is stored: `where email = 'ada@example.com
 is kept as `where email = '?'`. The snapshot is served over the dashboard's stats
 endpoint, so anything retained is readable by whoever can reach that page.
 
-drizzle parameterises, so a query it built carries no values anyway. The redaction
-is for the `sql` template escape hatch and hand-written statements. Redaction runs
-before truncation, so a long literal cannot survive by being cut off mid-string.
+Queries built with drizzle already use parameters, so they contain no values.
+Redaction matters for `sql` templates and hand-written statements. It runs before
+the text is truncated, so a long literal is never left half in the snapshot.
 
 ## Reading the cache
 
@@ -180,20 +179,19 @@ Three operations - `get`, `set`, `del` - always in that order, and only the ones
 that have run. `hitRate` is `hits / (hits + misses)`, and `0` before the first
 read.
 
-A `get` that threw is in `errors` and in neither term of the rate. An unreachable
-L2 would otherwise read as a cache that is missing, which is a different thing to
-go and fix.
+A `get` that threw counts in `errors` and is left out of `hitRate`. An unreachable
+L2 therefore shows up as errors, not as misses.
 
 ### The seam is the store, not `Cache`
 
-`CacheModule` wraps the configured `CacheStore` in a `MeteredCacheStore`, so a
-store injected directly is counted too, and so `wrap` records the one read that
-reached the store rather than one per coalesced caller. Five concurrent
-`wrap('k', load)` calls are one miss and one write.
+`CacheModule` wraps the configured `CacheStore` in a `MeteredCacheStore`. Code
+that injects the store directly is counted too. `wrap` counts only the reads that
+reach the store, so five concurrent `wrap('k', load)` calls are one miss and one
+write.
 
-Wrapping a `TieredCacheStore` counts the logical operation: an L2 hit promoted
-into L1 is one `get` and one hit, and the promotion write is not a `set`. To see
-that split, wrap a tier with a `CacheMetrics` of its own:
+With a `TieredCacheStore`, each call counts once. An L2 hit promoted into L1 is one
+`get` and one hit, and the promotion is not counted as a `set`. To count one tier
+separately, wrap it with its own `CacheMetrics`:
 
 ```ts
 const l1Stats = new CacheMetrics();
@@ -247,15 +245,15 @@ here is capped.
 }
 ```
 
-Every method on the connection and every `send()` passes through one seam inside
-`Redis`, so one series per verb covers all of them. `errors` counts commands that
-rejected, including the ones Bun throws synchronously for subscriber-mode and
-argument errors; they stay in `count` as well.
+Every method on the connection and every `send()` is counted, with one series per
+command. `errors` counts commands that rejected, including the ones Bun throws
+synchronously for subscriber-mode and argument errors. Errors are also included in
+`count`.
 
-`send('client', ['id'])` records `CLIENT`. That verb is whatever string the caller
-passed, and a command the server rejects is recorded against its verb like any
-other, so the series are capped the same way the queue's are: 128 verbs, then one
-`(other)` series, 129 in the payload.
+`send('client', ['id'])` records `CLIENT`. The series name is whatever command
+string the caller passed, even one the server rejects. So the number of series is
+capped, as for queues: 128 commands, then one `(other)` series, 129 in the
+payload.
 
 ### The key is never kept
 
@@ -319,24 +317,23 @@ handler ran.
 The publish side is always this container's. The handler side is only this
 container's when the handler ran here.
 
-`isolation` defaults to `'process'`, so a queue carrying a
-`@JobHandler({ background: true })` runs in a forked child that boots a container
-this one cannot see, and whose durations reach nothing here. A dedicated worker
-process built by `WorkerFactory` is a separate container too. In a web process
-publishing to such a queue, `handled` stays 0 while `published` climbs, as in the
-payload above.
+`isolation` defaults to `'process'`, so a `@JobHandler({ background: true })`
+runs in a forked child process with its own container. Its durations are not
+recorded here. A worker process built by `WorkerFactory` is a separate container
+too. A web process that publishes to such a queue shows `handled` at 0 while
+`published` climbs, as in the payload above.
 
-A handler with no `background` flag lands in the `handlerDuration` of whichever
-container consumed it: the one given `consume: true`, the one
-`WorkerFactory.attach()` was handed, or the worker process `WorkerFactory.create`
-booted, each reading its own `QueueMetrics`.
+A handler without `background` is recorded in the `handlerDuration` of the
+container that consumed the job: the one given `consume: true`, the one passed to
+`WorkerFactory.attach()`, or the worker process `WorkerFactory.create` booted. Each
+has its own `QueueMetrics`.
 
 ### Series are capped at 128, so a payload holds at most 129
 
-`publish(queue, name, data)` takes the name from the caller, so a name built from
-data would hold two histograms per value for the life of the process. Past 128
-distinct pairs everything else lands in one `(other)/(other)` series, which takes
-a slot of its own: `jobs` is 129 entries long once the collapse has happened.
+`publish(queue, name, data)` takes the job name from the caller. A name built from
+data would keep two histograms per distinct value for the life of the process, so
+after 128 distinct queue and name pairs, the rest go into one `(other)/(other)`
+series. That series is an extra entry, so `jobs` then has 129 entries.
 
 Only `publish()` is counted. `queue(name)` hands back bullmq's own `Queue`, and
 `add`, `addBulk` and `upsertJobScheduler` on it go round the seam.
@@ -376,10 +373,9 @@ mounts the page with no `authorize` and a read-only board.
 
 ## What it costs
 
-**+35.2 ns per request** in the shipped configuration. `RequestLoggingMiddleware`
-already allocates a `.then` and already holds the start mark, so the observation
-folds into both. Against the 5.38 µs request logging costs over
-`requestLogging: false`, that is 0.65%.
+**+35.2 ns per request** with the default configuration, because the recording
+reuses the timing `RequestLoggingMiddleware` already does. Request logging itself
+costs 5.38 µs over `requestLogging: false`, so metrics add 0.65% to that.
 
 With `requestLogging: false`, a `MetricsMiddleware` is installed instead and pays
 for its own `.then`: **+175.9 ns**.
@@ -391,10 +387,10 @@ and five statuses each is 261.5 µs, of which 182.2 µs is the 96 percentile rea
 
 ## Feeding Prometheus
 
-dunx writes no Prometheus text. Its histogram is
-`node:perf_hooks.createHistogram`, compiled into Bun, recording at 11.1 ns.
-`prom-client`'s observes at 655.9 ns and owns exposition, including bucket
-ordering, `+Inf`, label quoting and content-type negotiation.
+dunx does not output the Prometheus text format. It records with Bun's built-in
+`node:perf_hooks.createHistogram`, at 11.1 ns per value. `prom-client` records at
+655.9 ns and handles the output format, including bucket ordering, `+Inf`, label
+quoting and content-type negotiation.
 
 Pump the snapshot into your own registry:
 

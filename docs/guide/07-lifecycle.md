@@ -99,9 +99,10 @@ provide(DbConnection, {
 A rejected factory rejects `AppFactory.create()`. Nothing partially built is
 returned, and `onInit` never runs.
 
-`inject` lists `AppConfigService`, the subclass, rather than `ConfigService`. A
-factory parameter annotated `ConfigService<AppConfig>` against `inject: [ConfigService]`
-is rejected: parameters are contravariant and the token carries no type argument.
+List the subclass `AppConfigService` in `inject`, not `ConfigService`. TypeScript
+rejects a factory parameter typed `ConfigService<AppConfig>` with
+`inject: [ConfigService]`, because the token has no type argument to match it
+against.
 [Configuration](./12-configuration.md) covers the `as` option that declares the
 subclass.
 
@@ -122,9 +123,9 @@ export class SearchIndex implements OnInit {
 Runs after every provider is constructed, so a dependency is fully built by the
 time yours starts. A throwing `onInit` rejects `create()`.
 
-`onInit` is one unordered pass: which provider's runs first follows construction
-order, which follows module import order. A provider that another provider's
-`onInit` depends on having wired belongs in `OnBeforeInit`.
+`onInit` hooks run in construction order, which follows module import order. Do
+not rely on that order. If one provider's `onInit` needs another provider to be
+set up first, do that setup in `OnBeforeInit`.
 
 ## `OnBeforeInit`
 
@@ -191,18 +192,18 @@ export class Readiness implements OnBeforeShutdown {
 flipped inside `onShutdown` would answer on an already-closed port, while a load
 balancer is still routing traffic to it.
 
-So `app.drain()` runs every `onBeforeShutdown` first, then the port closes, then
-`onShutdown` tears down. `shutdown()` calls the drain itself, which is what makes a
-process with no server drain at all.
+`app.drain()` runs every `onBeforeShutdown` first, then closes the port, then
+runs `onShutdown`. `shutdown()` calls `drain()` itself, so an app with no HTTP
+server still runs `onBeforeShutdown`.
 
 Every `onBeforeShutdown` runs **concurrently**, unlike `onShutdown`. These are
 independent waits, so the phase costs as much as the slowest one rather than
 their sum. Teardown, in contrast, follows dependencies and has to run
 sequentially.
 
-`@dunx/http`'s `HealthModule` is built on this, and its `drainDelayMs` is the window
-above. A queue consumer that must stop accepting jobs before its database closes
-wants the same phase.
+`@dunx/http`'s `HealthModule` uses this phase: its `drainDelayMs` is how long it
+waits there. Use the same phase for a queue consumer that must stop taking jobs
+before its database closes.
 
 Do not confuse it with `@OnDrain()`, a websocket handler decorator in `@dunx/http`
 that fires when socket backpressure clears. Different layer, unrelated.
@@ -279,10 +280,9 @@ const app = await createTestApp({
 The discarded provider is never constructed, so an async `useFactory` that would
 have opened the real database does not run.
 
-Overriding a token that nothing binds throws, unless the token is a class. A
-silent no-op there would produce a test asserting against a provider it
-believed it had swapped. A class token nobody bound is accepted instead and
-bound lazily, because a class self-binds on demand anyway.
+Overriding a token that nothing binds throws, so a test cannot silently check a
+provider it never replaced. A class is the exception: overriding an unbound class
+is accepted, because any class can be injected without being listed.
 
 Full harness, including `createTestServer` and `RecordingLogger`:
 [Testing](./11-testing.md).
@@ -297,10 +297,15 @@ app.get(UsersService); // root scope view, then any single declarer
 app.get(UsersService, OrdersModule); // prefers OrdersModule's view
 ```
 
-`app.get` is more permissive than constructor injection. With a module argument
-it prefers that module's view. Failing that, it falls back to the root scope's
-view, then to the single module that declares the token, and finally self-binds
-a class into the module named. Two scopes binding the token differently is an
-error rather than a guess, and a module that is not in the graph at all throws.
+`app.get` finds more than constructor injection does. It looks in this order:
+
+1. the module you pass, if any
+2. the root module
+3. the module that declares the token, if exactly one does
+4. if no module declares it and it is a class, it registers the class in the
+   module you passed, or in the root module
+
+It throws if two modules declare the token, or if the module you pass is not part
+of the app.
 
 `AppRef` is the injectable form, and is dunx's `ModuleRef`.

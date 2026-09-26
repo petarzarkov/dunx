@@ -100,10 +100,10 @@ const app = await HttpFactory.create(AppModule);
 await app.listen(3000);
 ```
 
-That is the whole programming model. There is no `@Injectable()`, no
-`@Inject()`, no `reflect-metadata` import, no `experimentalDecorators`, and no
-`Response.json()` to remember. Two lines in `bunfig.toml` turn the constructor
-types into wiring:
+There is no `@Injectable()`, no `@Inject()`, no `reflect-metadata` import and no
+`experimentalDecorators`, and a handler returns a plain value instead of calling
+`Response.json()`. Two lines in `bunfig.toml` turn the constructor types into
+wiring:
 
 ```toml
 preload = ["@dunx/transform/preload"]
@@ -112,9 +112,9 @@ preload = ["@dunx/transform/preload"]
 preload = ["@dunx/transform/preload"]
 ```
 
-Bun's test runner reads its own `preload`, so the `[test]` entry is what keeps
-`bun test` working. Miss it and the app runs while the suite fails at the first
-provider with a constructor parameter.
+Bun's test runner reads its own `preload`, so `bun test` needs the `[test]`
+entry. Without it the app runs, but the tests fail at the first provider with a
+constructor parameter.
 
 ## How the DI differs
 
@@ -127,10 +127,10 @@ types at load time with [`oxc-parser`](https://github.com/oxc-project/oxc), a
 Rust parser over N-API, and records them on the class. There are no parameter
 decorators in the TC39 proposal, so `@Inject()` does not exist and never will.
 
-**A type that erases is a boot error.** Annotate a parameter with an interface,
-a primitive or a type-only import and dunx fails at boot naming that exact
-parameter. `emitDecoratorMetadata` hands you `undefined` and a stack trace three
-frames from where the mistake was.
+**A type that does not exist at runtime fails boot.** If a parameter's type is
+an interface, a primitive or a type-only import, dunx fails at boot and names
+that parameter. `emitDecoratorMetadata` gives you `undefined` and a stack trace
+three frames away from the mistake.
 
 **No `forwardRef`.** The dependency record is a thunk, evaluated at resolution
 rather than at class-definition time, so a circular import resolves on its own.

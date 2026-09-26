@@ -125,9 +125,8 @@ export class Ops {
 }
 ```
 
-Hits, misses, per-operation counts and timings, and nothing that holds a key.
-[Metrics](./24-metrics.md) has the payload and what the seam does and does not
-see.
+The snapshot holds hits, misses, and counts and timings per operation. It holds
+no keys. [Metrics](./24-metrics.md) lists the payload and what it covers.
 
 ## A cache that is not running
 
@@ -143,19 +142,19 @@ import { DegradingCacheStore, RedisCacheStore } from '@dunx/infra/cache';
 new DegradingCacheStore(new RedisCacheStore(redis), { logger });
 ```
 
-A read answers `undefined`, which `wrap` already treats as a miss and loads
-through. A write is dropped rather than queued: a deferred write hands back a
-cache that reports a value it never stored. `CacheModule.forRoot(init, {
-degrade: true })` wraps the configured store instead of constructing one.
+During an outage a read returns `undefined`, which `wrap` treats as a miss, so
+it loads the value. A write is dropped, not queued, so the cache never reports a
+value it did not store. `CacheModule.forRoot(init, { degrade: true })` wraps the
+configured store for you.
 
 Two things it does not do. **Only a connection error degrades** - a serialisation
 failure or a bad command is your bug and still throws, or the cache quietly stops
 working and nothing says so. And it **warns once per outage** rather than once
 per operation, because an unreachable cache is touched by every cached route.
 
-The default predicate is `isConnectionError`, which matches Bun's Redis code and
-nothing else. A store on another backend passes its own `degradable`, or nothing
-degrades and every failure still throws.
+The default `degradable` predicate is `isConnectionError`, which matches only
+Bun's Redis connection error code. For a store on another backend, pass your own
+`degradable`; without one, every failure still throws.
 
 `degraded` is whatever the last operation set, so a process that has not used the
 cache yet reports it healthy. `probe()` does one real read down the same path.
@@ -181,10 +180,10 @@ export class CacheStoreIndicator extends HealthIndicator {
 }
 ```
 
-Build the indicator by hand rather than injecting it. No module binds
-`DegradingCacheStore` (`degrade: true` wraps the store privately), so injecting
-it cannot reach the store your routes use. Keep the instance you
-constructed on a provider of your own and hand it over in the health factory:
+Create the indicator with `new`. `degrade: true` wraps the store inside the cache
+module and does not bind `DegradingCacheStore`, so an injected one would not be
+the store your routes use. Build the store on a provider of your own and pass it
+to the indicator in the health factory:
 
 ```ts
 export class CacheL2 {
@@ -199,10 +198,9 @@ export class CacheL2 {
 readiness: [new CacheStoreIndicator(cache.store)],
 ```
 
-**Wrap the L2, not the tier.** `TieredCacheStore.set` awaits L2 before L1, so a
-throwing L2 blocks the L1 write that would have served the next read; wrapping
-from outside swallows the error and loses the promotion with it.
-`examples/full` does it this way.
+**Wrap the L2 store, not the `TieredCacheStore`.** `TieredCacheStore.set`
+writes L2 first, then L1. If L2 throws, L1 is never written. Wrapping the whole
+tier hides that error, and the next read misses. `examples/full` wraps the L2.
 
 ## ETags and conditional GET
 
@@ -224,10 +222,10 @@ GET /api/colors  If-None-Match: W/"8e0f5c2a91d4b7e3"  304  no body
 | a `Response` with an `ETag` | its tag kept, and a 304 when `If-None-Match` names it             |
 | a `Response` without one    | untouched: a file, a stream or an `@Sse` route is never read      |
 
-`HttpOptionsProvider` has the same member as a getter, `get etag()`. Off by
-default. A handler that answers with `conditionalGet(response, req)` gets the 304
-with `etag` off too; `entityTag(body, weak)` computes the tag `etag` would.
-`@dunx/openapi`'s document does both.
+`etag` is off by default. On `HttpOptionsProvider` it is a getter, `get etag()`.
+With `etag` off, a handler can still return `conditionalGet(response, req)` to
+get the 304. `entityTag(body, weak)` computes the same tag `etag` would.
+`@dunx/openapi` uses both for its document.
 
 - **Weak by default**, `W/"..."`, as in Express. `{ etag: { weak: false } }`
   sends strong tags. `If-None-Match` compares weakly either way (RFC 9110
@@ -246,6 +244,6 @@ with `etag` off too; `entityTag(body, weak)` computes the tag `etag` would.
   the header in the handler and throw `HttpError(HttpStatusCode.PRECONDITION_FAILED)`.
   `If-Modified-Since` is ignored too, since no `Last-Modified` is sent.
 
-A 304 still runs the handler: the tag is computed from its result. A route whose
-value is expensive to build caches the value with `Cache` above, and `etag`
-saves the transfer.
+A 304 still runs the handler, because the tag is computed from its result. If
+the value is expensive to build, cache it with `Cache` above; `etag` only saves
+the transfer.

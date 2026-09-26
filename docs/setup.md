@@ -280,9 +280,9 @@ needs `resend` or `nodemailer` for the transport, and `@react-email/render` with
 bunx @dunx/mcp ./src/app.module.ts
 ```
 
-An MCP server over stdio answering what routes, providers, modules and gateways
-exist, and which constructor parameters would fail to resolve. It reads the module
-graph and never boots the app.
+This starts an MCP server over stdio. It tells an agent which routes, providers,
+modules and gateways exist, and which constructor parameters would fail to
+resolve. It reads the module graph without booting the app.
 
 ## More
 

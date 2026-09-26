@@ -1,8 +1,7 @@
 # Configuration
 
-Every app needs to turn a pile of environment strings into a typed object, once,
-at boot, and fail loudly if a value is missing. `ConfigModule` in `@dunx/core` is
-that, and almost nothing else.
+`ConfigModule` in `@dunx/core` turns environment variables into a typed object
+once, at boot, and fails boot if a value is missing or invalid.
 
 ```ts
 import { ConfigModule, Module } from '@dunx/core';
@@ -39,10 +38,10 @@ type ConfigModuleOptions<T extends object, S extends object = ConfigSource> = {
 );
 ```
 
-`forRoot` has two signatures, and `files` picks between them: without it `S` is
-`ConfigSource`, the flat string map `Bun.env` is; with it `S` is `ConfigValues`,
-where a parsed `port: 3000` is already a number. Annotating `ConfigValues` in an
-app that passes no files is a compile error rather than a run of empty reads.
+`files` decides what `validate` receives. Without `files`, it gets a
+`ConfigSource`: a flat map of strings, like `Bun.env`. With `files`, it gets
+`ConfigValues`, where a parsed `port: 3000` is already a number. Typing the
+parameter as `ConfigValues` without passing `files` is a compile error.
 
 `validate` receives the raw key/value pairs and returns the shaped, typed object.
 Whatever it throws is what boot fails with, so throw something whose message says
@@ -102,11 +101,9 @@ seed:
 
 ### A `.ts` or `.js` file
 
-These are **imported**, not parsed, and read from the **default export**. One
-file, one configuration value, so there is nothing to guess about which export
-was meant. A file whose default export is missing, `undefined` or `null` fails
-boot naming the file, rather than being skipped: a file that exists and resolves
-to nothing is a mistake, where an absent overlay is a choice.
+These files are **imported**, and dunx reads their **default export**. If the
+file exists but its default export is missing, `undefined` or `null`, boot fails
+and names the file. Only a file that does not exist is skipped.
 
 Unlike the other formats this one runs, so it can compose values, read `Bun.env`
 and import other modules:
@@ -123,18 +120,15 @@ export default {
 } satisfies ConfigFile;
 ```
 
-`satisfies` is the part worth copying, and the part that is easy to expect for
-free. **dunx has no framework-wide config type.** The shape of your
-configuration is whatever your `validate` or `schema` produces, so a bare object
-literal here is checked against nothing and a wrong key is caught at boot by the
-schema like any other. Naming your own type is what makes `tsc` say it first.
+Keep the `satisfies`. **dunx has no built-in config type**: the shape is whatever
+your `validate` or `schema` returns. Without `satisfies`, `tsc` does not check
+the object, and a wrong key is only caught at boot by your schema.
 
 `examples/full` uses this as its last layer, over `application.yml`.
 
-`import()` caches per resolved path, so booting twice in one process reads the
-file once. That is invisible to an app, which boots once; in a test that varies
-the environment per boot, pass `source` rather than mutating `Bun.env`, since
-`source` is spread over the file values and wins.
+`import()` caches each file, so booting twice in one process reads it only once.
+In a test that changes the environment between boots, pass `source` instead of
+changing `Bun.env`. `source` is applied over the file values, so it wins.
 
 ### The environment still wins
 
@@ -154,10 +148,9 @@ validate: (src) => schema.parse({
 
 Structure belongs in the file, secrets and per-deploy values in the environment.
 
-A schema DSL can only express what its author anticipated; a function expresses
-everything. Grouping flat variables into nested objects, deriving one value from
-two others, reading a secret out of a file, calling a secret manager: each is
-ordinary code inside `validate`, and none needs an option added to dunx.
+Other transformations are ordinary code in `validate` too: grouping flat variables into
+nested objects, deriving one value from two others, reading a secret from a file,
+or calling a secret manager.
 
 With zod it is one line, or none at all if the schema is the whole of it:
 
@@ -270,11 +263,11 @@ export class Notifier {
   or `null` at run time. It throws `ConfigError` naming the whole path.
 - `values` is the whole validated object, for destructuring or passing on.
 
-Paths stop at three segments. `config.values.a.b.c.d` is what reaches past them.
-Each depth is a separate overload rather than one recursive type: a conditional
-type over `T` anywhere on this class makes its variance unmeasurable, and
-`app.get(ConfigService)` then stops compiling. A top-level key that itself
-contains a dot is read whole, so it keeps winning over a path that spells it.
+Paths go up to three segments. For anything deeper, use
+`config.values.a.b.c.d`. (A recursive path type would stop
+`app.get(ConfigService)` from compiling, so each depth is its own overload.) A
+top-level key that contains a dot, such as `'a.b'`, is read as that key before it
+is tried as a path.
 
 ## Why `as` exists
 
@@ -318,9 +311,8 @@ LoggerModule.forRootAsync({
 });
 ```
 
-A subclass serves as both a precise token and a usable annotation - exactly what
-the factory case needs. Every `forRootAsync` in dunx exists so options can be
-read off config, so `as` comes up almost immediately.
+The subclass is both the token and the parameter type, so the factory
+type-checks. Use it in every `forRootAsync` factory that reads config.
 
 `ConfigService` stays bound to the same instance when `as` is used, so either name
 injects. That matters for library code, which only knows the base contract.
@@ -367,14 +359,11 @@ a flag to turn that on would only ever be turned on. `ConfigInput` stays
 private: it is the raw environment, and nothing outside the module should read
 it.
 
-Every other module offers `forRootAsync`; `ConfigModule` needs none. `validate`
-may already return a promise, and the container settles every factory before the
-first constructor runs, so an async validation has finished by the time anything
-can read it.
-
-`forRootAsync` exists elsewhere to let a factory **inject**, the one thing a
-zero-argument function cannot do. `validate` runs before everything and has
-nothing to inject.
+`ConfigModule` has no `forRootAsync`, and does not need one. For async
+validation, return a promise from `validate`. The container waits for it before
+any constructor runs, so nothing reads the config early. Other modules use
+`forRootAsync` to **inject** into their factory, and `validate` has nothing to
+inject.
 
 ## Where config is consumed
 
@@ -397,9 +386,10 @@ See [Logging](./13-logging.md), [Database](./14-database.md),
 
 ## Settings the HTTP server owns
 
-`HttpFactory.create(root, options)` builds the container, so its `options` argument
-is assembled before `ConfigService` exists. `HttpOptionsProvider` is the same
-settings as a provider, which can inject:
+To take HTTP settings from config, bind a subclass of `HttpOptionsProvider`. It
+has the same settings as the `options` of `HttpFactory.create(root, options)`,
+but it is a provider, so it can inject `ConfigService`. The `options` object
+cannot, because it is built before the container:
 
 ```ts
 export class AppHttpOptions extends HttpOptionsProvider {

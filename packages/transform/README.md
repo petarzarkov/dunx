@@ -72,9 +72,10 @@ Object.defineProperty(UsersService, Symbol.for('dunx.deps'), {
 
 `@dunx/core` reads that record and resolves the arguments before calling `new`.
 
-The record is a **thunk**, so it is evaluated when the container resolves the class
-rather than when the module is defined. A dependency declared later in the file, or
-reached through a circular import, therefore needs no `forwardRef`.
+The record is a **thunk**, a function that returns the parameter types. The
+container calls it when it resolves the class, not when the file loads. So a
+dependency declared later in the file, or reached through a circular import, needs
+no `forwardRef`.
 
 Only the appended statement is added. Every other byte of the original source is
 preserved, so comments, formatting, and the line numbers in stack traces are
@@ -93,11 +94,11 @@ the type with an abstract class, or bind it with token() and read it with
 inject(TOKEN) in a field initializer.
 ```
 
-That covers a type-only import, an inline `type` specifier, a local `interface` or
-type alias, a class type parameter, a primitive, and a union. A token is a runtime
-value with no type to declare, so it is read with `inject(TOKEN)` in a field
-initializer. For a type-only import the error says instead to make it a
-value import.
+This error covers a type-only import, an inline `type` specifier, a local
+`interface` or type alias, a class type parameter, a primitive and a union. For a
+type-only import, the error tells you to use a value import instead. For the rest,
+use an abstract class or a `token()`. A token has no type to put on a parameter,
+so read it with `inject(TOKEN)` in a field initializer.
 
 Class **expressions** are skipped: `const X = class Inner {}` binds `Inner` only
 inside the class body, so a statement appended after it could not reference the name.

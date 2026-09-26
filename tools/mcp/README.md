@@ -33,11 +33,11 @@ bunx @dunx/mcp ./src/app.module.ts    # those, plus the readers for your app
 }
 ```
 
-Drop the second argument until there is an app to read. Point it at the file that
-declares your root module once there is: `@Module` leaves a marker, so a module
-exported only by name is found on its own. `default` and `root` win if present, and
-`--export=<name>` settles a file that declares several. The path goes through
-`Bun.resolveSync`, so anything `import` accepts works.
+Leave out the path until you have an app. Then point it at the file that
+declares your root module. The server finds a module exported by any name,
+because `@Module` marks it. If the file has a `default` or `root` export, that
+one is used. If it declares several modules, pick one with `--export=<name>`. The
+path is resolved with `Bun.resolveSync`, so anything `import` accepts works.
 
 ## The tools
 

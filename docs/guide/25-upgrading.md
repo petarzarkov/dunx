@@ -18,10 +18,11 @@ miss reaches the response. A route handler is unchanged. See
 
 ### `Compression` stamps a 304 as its 200
 
-A 304 whose `content-type` `Compression` would encode now carries `Vary:
-accept-encoding`, and its `ETag` is weakened when the request negotiates an
-encoding, matching the 200 (RFC 9110 15.4.5). This reaches a 304 an app builds
-itself, with or without `etag`. A 304 with any other type is untouched.
+A 304 now gets the same headers its 200 would (RFC 9110 15.4.5). When its
+`content-type` is one `Compression` encodes, the 304 carries
+`Vary: accept-encoding`, and its `ETag` is made weak if the request negotiated an
+encoding. This applies to every 304, including one the app builds itself, with or
+without `etag`. A 304 with any other content type is unchanged.
 
 ### An unmatched-path flood logs one line a second
 
@@ -120,15 +121,17 @@ OpenApiModule.forRootAsync({
 });
 ```
 
-`imports` is what puts `AuthDocs` in reach: the module is its own scope, so
-importing its module into the root does not reach this factory.
+Put `DocsModule` in the factory's own `imports`, as above, so it can inject
+`AuthDocs`. Importing `DocsModule` into the root module is not enough.
 
 ## 3.1.0
 
 ### An unmatched path answers 404
 
-`HttpFactory.create` used to report a miss to global middleware with no route
-metadata. A global guard refused it, and a prober could not tell a 404 from a 401. That is now opt-in.
+`HttpFactory.create` used to pass a request for an unmatched path to global
+middleware with no route metadata. A global guard then refused it with a 401, so
+a prober could not tell a missing path from a protected one. An unmatched path
+now answers 404, and the old behaviour is opt-in.
 
 | Before                            | After                                    |
 | --------------------------------- | ---------------------------------------- |
@@ -232,17 +235,18 @@ still works. A subclass does not claim `RedisConnection`.
 
 ### The websocket relay can be a provider
 
-`relay: new RedisRelay({...})` was an instance `main.ts` built and threaded into
-`HttpFactory.create`. That made it the one setting an options provider could not
-answer from config.
+`relay: new RedisRelay({...})` used to be built in `main.ts` and passed to
+`HttpFactory.create`. It was the only setting that could not come from config
+through an options provider.
 
 | Before                                     | After                                        |
 | ------------------------------------------ | -------------------------------------------- |
 | `new RedisRelay(...)` in `main.ts`         | `WsRelayModule.forRootAsync({ useFactory })` |
 | `relay:` and `relayChannel:` on `create()` | `override get relay()` on the provider       |
 
-The container closes it at shutdown. `PubSub.close()` does not do that for an app
-that never opened a socket. Passing an instance to `create()` still works.
+The container closes the relay at shutdown, including in an app that never
+opened a socket, where `PubSub.close()` would not close it. Passing an instance
+to `create()` still works.
 
 ### A constraint violation answers 409
 

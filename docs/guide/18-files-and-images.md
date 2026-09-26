@@ -205,12 +205,14 @@ await storage.read('../../etc/passwd'); // PathTraversalError
 That covers `../`, an absolute key, an empty key, and the root itself. None of
 those name a file the caller is entitled to.
 
-Two checks run, and the order matters. A key is accepted or refused
-**identically on every platform**: `..\..\etc` is one legal filename to POSIX
-`resolve` but three segments to Windows, so `..` is checked as a segment on
-**both separators** before the path is resolved at all. The boundary check then
-catches what segments cannot: an absolute key, or a root-relative one that
-resolves out.
+Two checks run, in this order:
+
+1. Any `..` segment is rejected before the path is resolved. The key is split on
+   **both `/` and `\`**, so it passes or fails **the same way on every
+   platform**. (POSIX reads `..\..\etc` as one filename. Windows reads it as
+   three segments.)
+2. The resolved path must stay inside the root. This catches an absolute key, or
+   one that resolves outside the root.
 
 S3 keys get the same treatment. A key is opaque to S3, so a `..` in one was meant
 as a path, and under a configured prefix it would escape it. There it is rejected
@@ -332,12 +334,11 @@ const thumb = source.resize(64, 64); // source is unchanged
 const hero = source.resize(1200); // and still 'source'
 ```
 
-This is the single most important difference between `ImagePipeline` and
-`Bun.Image` underneath it. **`Bun.Image` mutates and returns `this`**, so two
-callers holding one instance silently reconfigure each other's transform. An
-`ImagePipeline` returns a new value from every operation. It can be shared and
-forked freely, and re-runs the whole recipe from the original bytes on each
-terminal.
+**`Bun.Image`, which `ImagePipeline` is built on, mutates and returns `this`.**
+Two callers holding one `Bun.Image` change each other's transform without
+noticing. Every `ImagePipeline` operation returns a new value, so you can share
+and branch a pipeline freely. Each terminal call runs every step again from the
+original bytes.
 
 **Operations:** `resize`, `rotate`, `flip`, `flop`, `modulate`, `to`.
 

@@ -115,11 +115,11 @@ controller's. Every response from the route, mapped errors included, carries:
 | `Sunset`      | `sunset` | HTTP-date, [RFC 8594][rfc8594]                    | `Mon, 01 Mar 2027 00:00:00 GMT`                                 |
 | `Link`        | `link`   | `rel="deprecation"`, RFC 9745 section 3, appended | `<https://example.com/v1>; rel="deprecation"; type="text/html"` |
 
-`since` is required, because RFC 9745 gives `Deprecation` no value other than a
-date. Dates are strings `new Date()` reads, or `Date`s; a date-only string is
-UTC midnight. A date that does not parse, a `sunset` before `since` (RFC 9745
-section 4 forbids it), or a `link` that is not a URL throws when the class is
-defined.
+`since` is required: RFC 9745 only allows a date as the `Deprecation` value.
+Pass a `Date` or a string `new Date()` can parse; a date-only string means
+midnight UTC. The class throws when it is defined if a date does not parse, if
+`sunset` is before `since` (RFC 9745 section 4 forbids it), or if `link` is not
+a URL.
 
 `Deprecation` and `Sunset` are set only where the handler did not set its own.
 `Link` is appended, so a handler's pagination `Link` keeps both. The headers are
@@ -135,9 +135,9 @@ path it is served at. A handler serving two versions is two operations, with
 the version in the `operationId`: `UsersV2Controller_list_v2` and
 `UsersV2Controller_list_v3`. An unversioned route keeps `Controller_handler`.
 
-Under header and media-type versioning every version shares its paths, and
-OpenAPI 3.1 allows one operation per path and method, so each version is a
-document of its own. Each holds that version's routes and every unversioned one.
+With header or media-type versioning, every version shares the same paths.
+OpenAPI 3.1 allows one operation per path and method, so each version gets its own
+document, holding that version's routes plus every unversioned route.
 
 | URL                       | Serves                                                    |
 | ------------------------- | --------------------------------------------------------- |
@@ -146,20 +146,23 @@ document of its own. Each holds that version's routes and every unversioned one.
 | `/docs?version=1`         | The explorer page for version 1                           |
 | `?version=` of no version | 404                                                       |
 
-The page shows a bar of links, one per version, above Swagger UI or Scalar. It
-is plain HTML, so the page's script hash is unchanged. Swagger UI's own `urls`
-dropdown lives in its standalone layout, which needs a second 1 MiB bundle
-`SwaggerRenderer` does not serve. A renderer of your own receives the same
-links as `PageOptions.versions`.
+The page shows a row of links, one per version, above Swagger UI or Scalar. The
+row is plain HTML, so the page's script hash does not change. Swagger UI's own
+`urls` dropdown is not used: it needs Swagger UI's standalone layout, a second
+1 MiB bundle that `SwaggerRenderer` does not serve. A custom renderer gets the
+same links in `PageOptions.versions`.
 
 A header-versioned operation declares the header as a parameter whose `const`
 is its version, optional for the default version. Media type declares nothing:
 OpenAPI ignores a header parameter named `Accept`.
 
-`@Deprecated` marks the operation `deprecated: true`, as `@ApiDoc({ deprecated:
-true })` does. `@dunx/openapi` reads the app's `versioning`. The offline CLI
-cannot see `HttpOptions`, so an app versioning by anything but a plain `'uri'`
-passes it in the `openapi` export, and `apiVersion` picks a version's document:
+`@Deprecated` marks the operation `deprecated: true`, the same as
+`@ApiDoc({ deprecated: true })`.
+
+`@dunx/openapi` reads the app's `versioning` setting. The offline CLI cannot see
+`HttpOptions`, so if the app versions by anything other than plain `'uri'`, pass
+`versioning` in the `openapi` export. `apiVersion` picks which version's
+document to write:
 
 ```ts
 export const openapi = {
