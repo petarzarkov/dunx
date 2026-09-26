@@ -1,9 +1,8 @@
 import type { DiscoveredRoute } from '../route/discover.js';
 import type { RouteVersioning } from '../route/version.js';
 import type { CorsOptions } from './cors.js';
-import type { ServedHandler } from './middleware.js';
+import { withResponseStamp, type ServedHandler } from './middleware.js';
 import type { BunRoutes } from './routes.js';
-import { withResponseStamp } from './security-headers.js';
 import { varyOn } from './vary.js';
 
 /** What a header or media-type table entry needs besides its handlers. */

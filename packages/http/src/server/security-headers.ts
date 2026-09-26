@@ -1,4 +1,8 @@
-import { mapRoutes, type ServedHandler } from './middleware.js';
+import {
+  mapRoutes,
+  withResponseStamp,
+  type ServedHandler,
+} from './middleware.js';
 import type { BunRoutes } from './routes.js';
 
 /**
@@ -95,21 +99,6 @@ export const setAbsentHeaders = (
   }
   return response;
 };
-
-/**
- * Runs `stamp` on every response `handler` gives. Not `async`: a handler that
- * answered synchronously still does, so the direct path keeps its measured
- * advantage.
- */
-export const withResponseStamp =
-  (
-    stamp: (response: Response) => Response,
-    handler: ServedHandler,
-  ): ServedHandler =>
-  (req, server) => {
-    const response = handler(req, server);
-    return response instanceof Promise ? response.then(stamp) : stamp(response);
-  };
 
 /**
  * The security headers for one app, with the responses dunx builds itself built

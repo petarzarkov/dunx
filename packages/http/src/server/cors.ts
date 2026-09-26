@@ -1,4 +1,4 @@
-import type { ServedHandler } from './middleware.js';
+import { withResponseStamp, type ServedHandler } from './middleware.js';
 import { HttpStatusCode } from './status.js';
 import { varyOn } from './vary.js';
 
@@ -87,12 +87,10 @@ export const withCors = (
   handler: ServedHandler,
 ): ServedHandler => {
   const exposed = exposedOf(options);
-  return (req, server) => {
-    const response = handler(req, server);
-    return response instanceof Promise
-      ? response.then((settled) => applyCors(options, exposed, req, settled))
-      : applyCors(options, exposed, req, response);
-  };
+  return withResponseStamp(
+    (response, req) => applyCors(options, exposed, req, response),
+    handler,
+  );
 };
 
 /**
