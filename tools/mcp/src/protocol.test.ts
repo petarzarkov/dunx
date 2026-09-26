@@ -747,4 +747,23 @@ describe('structured tool results', () => {
     expect(result['structuredContent']).toBeUndefined();
     expect(result['content']).toEqual([{ type: 'text', text: '"just text"' }]);
   });
+
+  /** `ToolDefinition` is public, and a tool may answer with a class instance. */
+  it('keeps it for a class instance, which serialises to an object', async () => {
+    class Report {
+      readonly total = 2;
+    }
+    const result = await resultOf(
+      [
+        {
+          name: 'report',
+          description: 'Answers with a class instance.',
+          inputSchema: { type: 'object', properties: {} },
+          run: () => new Report(),
+        },
+      ],
+      'report',
+    );
+    expect(result['structuredContent']).toEqual({ total: 2 });
+  });
 });
