@@ -361,9 +361,9 @@ Replace all of it by passing `onError` to `HttpFactory.create`; see
 
 ## Vendor-specific features sit behind a vendor check
 
-Standard Schema only covers validation. It has no way to turn a schema into JSON
-Schema, which `@dunx/openapi` needs. So `@dunx/openapi` checks which library made
-the schema, the one vendor detail the interface includes:
+Standard Schema only covers validation, so `@dunx/openapi` converts schemas per
+library (see [the vendor check](./10-openapi.md#the-vendor-check)). It reads the
+one vendor detail the interface includes:
 
 ```ts
 export const vendorOf = (schema: StandardSchemaV1): string =>

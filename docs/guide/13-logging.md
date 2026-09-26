@@ -281,9 +281,10 @@ const fileAndConsole = (path: string): Transport[] => [
 ];
 ```
 
-`FileTransport` buffers. `LoggerModule` drains it in `onShutdown`, and that runs
-after the services that depend on the logger have shut down, so they can still
-log while they close.
+`FileTransport` buffers. `LoggerModule` drains it in `onShutdown`. Shutdown runs
+hooks in reverse order of creation, and the logger is created before the services
+that use it, so its hook runs last. Those services can still log from their own
+`onShutdown`.
 
 The drain uses `closeAsync` and awaits it. That matters for network transports:
 a plain `close()` cannot wait for a collector to answer, so it would drop the

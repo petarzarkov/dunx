@@ -72,8 +72,9 @@ live `Bun.serve` server at 14.7 ns rather than counted.
 
 ### One series per route pattern
 
-`/users/1` and `/users/2` are counted in one `/users/:id` series. Series are keyed
-by route pattern, so there is at most one series per handler.
+`/users/1` and `/users/2` are counted in one `/users/:id` series. The pattern is
+fixed when the route table is built at boot, so nothing is normalised per request
+and there is at most one series per handler.
 
 Every path that matched nothing collapses into a single `(unmatched)` series per
 method. A 404's log line still names the concrete path it missed.
@@ -188,8 +189,8 @@ that injects the store directly is counted too. `wrap` counts only the reads tha
 reach the store, so five concurrent `wrap('k', load)` calls are one miss and one
 write.
 
-With a `TieredCacheStore`, each call counts once. An L2 hit copied into L1 is one
-`get` and one hit, and the copy into L1 is not counted as a `set`. To count one tier
+With a `TieredCacheStore`, each call counts once. An L2 hit promoted into L1 is one
+`get` and one hit, and the promotion is not counted as a `set`. To count one tier
 separately, wrap it with its own `CacheMetrics`:
 
 ```ts

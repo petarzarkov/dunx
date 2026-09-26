@@ -200,8 +200,7 @@ readiness: [new CacheStoreIndicator(cache.store)],
 
 **Wrap the L2 store, not the `TieredCacheStore`.** `TieredCacheStore.set`
 writes L2 first, then L1. If L2 throws, L1 is never written. Wrapping the whole
-tier hides the error, but the value still does not reach L1, so the next read
-misses. `examples/full` wraps the L2.
+tier hides that error, and the next read misses. `examples/full` wraps the L2.
 
 ## ETags and conditional GET
 

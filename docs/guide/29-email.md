@@ -69,7 +69,7 @@ and runs the greeting and AUTH, while Resend has no call that is not a send, so
 `SmtpTransport` has one and `ResendTransport` does not. A caller that finds none
 has been told nothing, which is `unknown` to a health probe rather than `down`.
 
-`EmailTransport` is an abstract class so that it can be injected.
+`EmailTransport` is an abstract class because a constructor can only inject something that exists at runtime, and an interface does not.
 `OutboundEmail` is the message with the module's defaults applied: `from` is
 filled in, every recipient is an object, and `to`, `cc`, `bcc`, `attachments`
 and `headers` are always present. A transport only maps it onto its provider.

@@ -104,7 +104,7 @@ ResilienceModule.forRootAsync({
 
 ## Deciding what is worth retrying
 
-`RetryClassifier` decides. It is an abstract class so that it can be injected.
+`RetryClassifier` decides. It is an abstract class because a constructor can only inject something that exists at runtime, and an interface does not.
 The default
 is `TransientRetryClassifier`: everything is retried except an abort, which means
 the attempt's timeout expired or the caller's signal fired.

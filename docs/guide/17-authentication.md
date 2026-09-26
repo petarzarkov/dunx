@@ -472,7 +472,9 @@ handle. A test double for `RedisStore` needs only six methods.
 
 `@dunx/auth` does not depend on `@dunx/infra`. It depends on `@dunx/http`, because
 the guard is HTTP middleware. `@dunx/infra` does not depend on `@dunx/http`,
-because CLI scripts, seeders and queue workers use it without an HTTP server.
+because CLI scripts, seeders and queue workers use it without an HTTP server. The
+build problem that settled this is in
+[Authentication](../architecture/authentication.md).
 
 ## No schema
 
