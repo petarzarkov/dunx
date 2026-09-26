@@ -4,6 +4,53 @@ Every release, newest first. Written by `bun run version` from the commits in th
 release range. Every @dunx package shares one version and ships together, so a
 release covers all of them.
 
+## 3.10.1 - 2026-09-26
+
+Connection passwords kept out of url boot errors, shared helpers, and faster CORS and security headers
+
+The Redis and websocket relay url checks no longer write the url as given
+into their boot errors, so a wrong scheme or an unparseable url cannot log
+a password. The check and redactUrl live once in @dunx/core as assertUrl,
+and AMQP, Redis and both relays use it.
+
+@dunx/core also exports within(), the one timer race that the queue, AMQP,
+database, dashboard and health code had each written for themselves. The
+dashboard's probe bound is the health registry's, and a probe that times
+out there now reads "no answer in N ms".
+
+In @dunx/testing, TestClient, Http2Client and TestServer are classes, and
+testClient(), http2Client() and createTestServer() return them. close
+stays bound, so afterAll(server.close) works; request and json now need
+their receiver. A hand-built object typed as Http2Client no longer
+satisfies it. The CSRF check and ConsoleLogger's stdout batch are classes
+too.
+
+With securityHeaders on, the responses dunx builds carry the headers from
+construction instead of a per-response walk, and CORS routes keep the
+direct path. As a share of raw Bun.serve on a JSON route: securityHeaders
+84.9% to 91.8%, cors 82.4% to 90.2%, both 73.7% to 83.5%.
+
+### Features
+
+- **example**: the demo page as a guided walkthrough, with the 3.10 features ([`d0c7f76`](https://github.com/petarzarkov/dunx/commit/d0c7f76317228b8d69478f4213000b02eb69a497))
+
+### Fixes
+
+- **testing**: keep TestServer.close bound, so afterAll(server.close) works ([`65983df`](https://github.com/petarzarkov/dunx/commit/65983dff85b4c98c05c84a7c04f7dcf300f40c9a))
+- **mcp**: keep structuredContent for a tool that answers with a class instance ([`d909bc9`](https://github.com/petarzarkov/dunx/commit/d909bc90f8f473470dba05492c073fb1d13c0adb))
+- **core**: keep connection passwords out of url boot errors ([`9bd922a`](https://github.com/petarzarkov/dunx/commit/9bd922a8ac488a124bb701138dda4673f2bca6da))
+- **example**: the walkthrough on a phone ([`aefa037`](https://github.com/petarzarkov/dunx/commit/aefa037bb4990cb83485532575e719f5175a333e))
+
+### Performance
+
+- **http**: prebuilt security headers, and CORS on the direct path ([`ac31a56`](https://github.com/petarzarkov/dunx/commit/ac31a56d7d09eb0d300bfa7d445103d144afa5d4))
+
+### Refactors
+
+- **http**: withCors stamps through withResponseStamp ([`3069797`](https://github.com/petarzarkov/dunx/commit/3069797a664ff25e252f75380ae78888d950d702))
+- classes for the testing clients, CSRF and the stdout batch ([`57913d4`](https://github.com/petarzarkov/dunx/commit/57913d4c666416a3ad6efdae13628e5ac5dc3260))
+- one declaration for the timeout race, probe bound, route walk and handler selection ([`131c49c`](https://github.com/petarzarkov/dunx/commit/131c49caaeb16870b9bbaccf140ca1e6225a3748))
+
 ## 3.10.0 - 2026-09-25
 
 Tracing, security headers, CSRF, idempotency, versioning, ETags and cookies
