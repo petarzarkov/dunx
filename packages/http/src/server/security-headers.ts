@@ -111,16 +111,54 @@ export const withResponseStamp =
     return response instanceof Promise ? response.then(stamp) : stamp(response);
   };
 
-/** Wraps one table entry at boot. */
-export const withSecurityHeaders = (
-  pairs: HeaderPairs,
-  handler: ServedHandler,
-): ServedHandler =>
-  withResponseStamp((response) => setAbsentHeaders(response, pairs), handler);
+/**
+ * The security headers for one app, with the responses dunx builds itself built
+ * already carrying them. `stamp` then skips those, and does the `has`/`set` walk
+ * only for a `Response` a handler returned or an error mapper built.
+ *
+ * Measured on Bun 1.4.2: a JSON response with the walk cost 983 ns, prebuilt and
+ * marked 435 ns, and 305 ns with no security headers at all. The walk alone is
+ * most of it, because the first touch of `response.headers` materialises them.
+ */
+export class SecuredResponses {
+  readonly #pairs: HeaderPairs;
+  /** Copied by every `Response` built from it, so a later `set` stays local. */
+  readonly #init: Headers;
+  readonly #stamped = new WeakSet<Response>();
 
-/** Every entry of the route table, `OPTIONS` preflights included. */
-export const withSecuredRoutes = (
-  pairs: HeaderPairs,
-  routes: BunRoutes,
-): BunRoutes =>
-  mapRoutes(routes, (handler) => withSecurityHeaders(pairs, handler));
+  constructor(pairs: HeaderPairs) {
+    this.#pairs = pairs;
+    this.#init = new Headers(pairs as [string, string][]);
+  }
+
+  /** `Response.json(value, { status })`, already carrying every header. */
+  json(value: unknown, status: number): Response {
+    return this.#mark(Response.json(value, { status, headers: this.#init }));
+  }
+
+  /** A bodiless response, already carrying every header. */
+  empty(status: number): Response {
+    return this.#mark(new Response(null, { status, headers: this.#init }));
+  }
+
+  stamp(response: Response): Response {
+    return this.#stamped.has(response)
+      ? response
+      : setAbsentHeaders(response, this.#pairs);
+  }
+
+  /** One table entry, stamped. */
+  wrap(handler: ServedHandler): ServedHandler {
+    return withResponseStamp((response) => this.stamp(response), handler);
+  }
+
+  /** Every entry of the route table, `OPTIONS` preflights included. */
+  routes(routes: BunRoutes): BunRoutes {
+    return mapRoutes(routes, (handler) => this.wrap(handler));
+  }
+
+  #mark(response: Response): Response {
+    this.#stamped.add(response);
+    return response;
+  }
+}

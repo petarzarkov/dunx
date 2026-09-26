@@ -14,9 +14,9 @@ import { HttpFactory } from './factory.js';
 import type { HttpOptions } from './options.js';
 import { HttpOptionsProvider } from './options-provider.js';
 import {
+  SecuredResponses,
   securityHeaderPairs,
   STRICT_CSP,
-  withSecurityHeaders,
 } from './security-headers.js';
 import { inlineScriptPolicy } from './html.js';
 import { serving } from './serving.fixture.js';
@@ -253,22 +253,48 @@ describe('HttpOptionsProvider.securityHeaders', () => {
   });
 });
 
-describe('withSecurityHeaders', () => {
-  const pairs = securityHeaderPairs({});
+describe('SecuredResponses', () => {
+  const secured = new SecuredResponses(securityHeaderPairs({}));
   const req = new Request('http://x.test/') as Bun.BunRequest;
 
   it('answers synchronously when the handler did', () => {
-    const served = withSecurityHeaders(pairs, () => new Response('x'));
-    const response = served(req);
+    const response = secured.wrap(() => new Response('x'))(req);
     expect(response).toBeInstanceOf(Response);
     expect((response as Response).headers.get('x-frame-options')).toBe('DENY');
   });
 
   it('adopts a promise when the handler returned one', async () => {
-    const served = withSecurityHeaders(pairs, async () => new Response('x'));
-    const response = served(req);
+    const response = secured.wrap(async () => new Response('x'))(req);
     expect(response).toBeInstanceOf(Promise);
     expect((await response).headers.get('x-frame-options')).toBe('DENY');
+  });
+
+  it('builds json and empty responses already carrying every header', () => {
+    const json = secured.json({ a: 1 }, 201);
+    const empty = secured.empty(204);
+    for (const response of [json, empty]) {
+      expect(response.headers.get('x-frame-options')).toBe('DENY');
+      expect(response.headers.get('x-content-type-options')).toBe('nosniff');
+    }
+    expect(json.status).toBe(201);
+    expect(json.headers.get('content-type')).toContain('application/json');
+    expect(empty.status).toBe(204);
+  });
+
+  /** The prebuilt `Headers` is shared by every response built from it. */
+  it('keeps a header set on one built response off the next', () => {
+    const first = secured.json({}, 200);
+    first.headers.set('x-frame-options', 'SAMEORIGIN');
+    expect(secured.json({}, 200).headers.get('x-frame-options')).toBe('DENY');
+  });
+
+  it('stamps a response it did not build, keeping a header it set itself', () => {
+    const own = new Response('x', {
+      headers: { 'x-frame-options': 'SAMEORIGIN' },
+    });
+    const stamped = secured.stamp(own);
+    expect(stamped.headers.get('x-frame-options')).toBe('SAMEORIGIN');
+    expect(stamped.headers.get('x-content-type-options')).toBe('nosniff');
   });
 });
 

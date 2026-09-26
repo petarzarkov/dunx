@@ -1,5 +1,5 @@
 import { AppError, type Ctor, type ModuleRef } from '@dunx/core';
-import type { BunRequest, Server } from 'bun';
+import type { Server } from 'bun';
 import { withRequestCookies } from '../cookies/fallback.js';
 import { PathClaims } from '../route/claims.js';
 import { DEPRECATED, withDeprecation } from '../route/deprecation.js';
@@ -12,13 +12,14 @@ import {
   UNMATCHED,
   type MetaKey,
 } from '../route/metadata.js';
-import type { RouteInput } from '../route/schema.js';
 import type { UpgradeHandler } from '../ws/adapter.js';
 import { buildContext, type RouteContext } from './context.js';
 import { preflight, withCors, type CorsOptions } from './cors.js';
 import { defaultErrorMapper, HttpError, type ErrorMapper } from './errors.js';
-import { conditionalGet, type EntityTags } from './etag.js';
-import { buildInputReader, type InputReader } from './input.js';
+import type { EntityTags } from './etag.js';
+import { directOr, toResponse, type ResponseExtras } from './respond.js';
+import type { SecuredResponses } from './security-headers.js';
+import { buildInputReader } from './input.js';
 import { TraceContext } from './trace-context.js';
 import {
   compose,
@@ -66,31 +67,6 @@ export type ServeRoutes = Record<
   string,
   Partial<Record<RouteMethod, ServedHandler | UpgradeHandler>>
 >;
-
-/**
- * A `Response` passes through untouched - that is the escape hatch, and nothing
- * about it is worth second-guessing. Nothing at all is a 204: `Response.json(null)`
- * would be a body claiming to be no body.
- *
- * `tags` is set on a `GET` route under `etag`. A 200 value is then tagged, and a
- * handler's own `Response` only has its own `ETag` compared.
- */
-const toResponse = (
-  value: unknown,
-  status: number,
-  req: Request,
-  tags: EntityTags | undefined,
-): Response => {
-  if (value instanceof Response) {
-    return tags === undefined ? value : conditionalGet(value, req);
-  }
-  if (value === undefined || value === null) {
-    return new Response(null, { status: HttpStatusCode.NO_CONTENT });
-  }
-  return tags === undefined || status !== HttpStatusCode.OK
-    ? Response.json(value, { status })
-    : tags.json(value, req);
-};
 
 const statusFor = (route: DiscoveredRoute): number =>
   route.options?.status ?? defaultStatusFor(route.method);
@@ -252,7 +228,7 @@ export const buildFallback = (
 
   // A claimed path is served here rather than from the route table, so its
   // preflight is built here too. `buildRoutes` does the same for a real route.
-  const claimedPreflight = new Map<string, RouteHandler>();
+  const claimedPreflight = new Map<string, ServedHandler>();
   if (cors) {
     for (const entry of middleware) {
       if (!hasClaimedPaths(entry)) continue;
@@ -283,70 +259,11 @@ export const buildFallback = (
   return withRequestCookies(cors ? withCors(cors, run) : run);
 };
 
-/**
- * The direct path, taken when a route has no middleware and no CORS. Nothing here
- * is `async`: a promise is allocated only where there is something to wait for.
- *
- * The general path is four `await`s across two async frames on values that are
- * usually not thenable. A route with no schemas awaits nothing, and a `body` route
- * pays one promise link instead of six frames.
- *
- * Worth ~6 points of throughput on `params` and a further ~5 on `validate`. A
- * handler that does return a promise is adopted rather than awaited by a wrapper.
- */
-const directOr = (
-  guarded: RouteHandler,
-  route: DiscoveredRoute,
-  read: InputReader,
-  status: number,
-  onError: ErrorMapper,
-  noMiddleware: boolean,
-  tags: EntityTags | undefined,
-): ServedHandler => {
-  if (!noMiddleware) return guarded;
-
-  // `toResponse` throws on a value `JSON.stringify` cannot take, so it is inside
-  // the mapper's reach on every branch - including the `then` callbacks, where a
-  // throw would otherwise escape as an unhandled rejection instead of a 500.
-  const settle = (value: unknown, req: BunRequest): Response => {
-    try {
-      return toResponse(value, status, req, tags);
-    } catch (error) {
-      return onError(error, req);
-    }
-  };
-
-  const invoke = (
-    input: RouteInput,
-    req: BunRequest,
-  ): Response | Promise<Response> => {
-    try {
-      const value = route.handler(input);
-      return value instanceof Promise
-        ? value.then(
-            (resolved) => settle(resolved, req),
-            (error: unknown) => onError(error, req),
-          )
-        : settle(value, req);
-    } catch (error) {
-      return onError(error, req);
-    }
-  };
-
-  return (req) => {
-    try {
-      const input = read(req);
-      return input instanceof Promise
-        ? input.then(
-            (resolved) => invoke(resolved, req),
-            (error: unknown) => onError(error, req),
-          )
-        : invoke(input, req);
-    } catch (error) {
-      return onError(error, req);
-    }
-  };
-};
+/** The app-wide response settings `buildRoutes` passes to each route. */
+export interface RouteResponses {
+  readonly etag?: EntityTags | undefined;
+  readonly secured?: SecuredResponses | undefined;
+}
 
 export const buildRoutes = (
   discovered: readonly DiscoveredRoute[],
@@ -355,7 +272,7 @@ export const buildRoutes = (
   cors?: CorsOptions,
   resolve: GuardResolver = construct,
   selection?: VersionSelection,
-  etag?: EntityTags,
+  { etag, secured }: RouteResponses = {},
 ): BunRoutes => {
   assertNoCollisions(discovered, selection?.versioning.header !== undefined);
   const routes: BunRoutes = {};
@@ -377,7 +294,10 @@ export const buildRoutes = (
     const read = buildInputReader(route.options);
     const status = statusFor(route);
     // `GET` alone: Bun answers `HEAD` from the `GET` handler, so it matches.
-    const tags = route.method === 'GET' ? etag : undefined;
+    const extras: ResponseExtras = {
+      tags: route.method === 'GET' ? etag : undefined,
+      secured,
+    };
     /**
      * Global outermost, then the declaring module's middleware, then the controller's
      * guards, then the method's.
@@ -411,7 +331,7 @@ export const buildRoutes = (
     // Innermost, so a 304 is what request logging records and `Compression`
     // skips, and the tag describes the bytes before any encoding.
     const chained = compose(chain, context, async (req) =>
-      toResponse(await route.handler(await read(req)), status, req, tags),
+      toResponse(await route.handler(await read(req)), status, req, extras),
     );
     const guarded: RouteHandler = async (req) => {
       try {
@@ -427,17 +347,16 @@ export const buildRoutes = (
 
     // Bun hands the table entry its own server, so an idling route clears its
     // own deadline: no registry, and no cost to any other route.
-    const undeprecated = cors
-      ? withCors(cors, guarded)
-      : directOr(
-          guarded,
-          route,
-          read,
-          status,
-          onError,
-          chain.length === 0,
-          tags,
-        );
+    const direct = directOr(
+      guarded,
+      route,
+      read,
+      status,
+      onError,
+      chain.length === 0,
+      extras,
+    );
+    const undeprecated = cors ? withCors(cors, direct) : direct;
     const deprecation = context.get(DEPRECATED);
     const served =
       deprecation === undefined

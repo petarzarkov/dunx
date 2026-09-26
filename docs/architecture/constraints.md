@@ -570,6 +570,28 @@ shipped: `has` costs about 0.2-0.3 us over a blind `set`, and it is what lets a
 page or a route keep its own header. With `securityHeaders` off the wrapper is
 not installed.
 
+**A response dunx builds itself now carries the headers from construction.**
+`SecuredResponses` passes one prebuilt `Headers` as the `init` of
+`Response.json` and the bodiless 204, which copies it and keeps
+`application/json`, and marks the result in a `WeakSet` so the wrapper skips its
+`has` walk. That is construction, not the rebuild the last row priced. A
+`Response` a handler returned, or an error mapper built, still gets the walk.
+
+| One JSON response, Bun 1.4.2 | ns  |
+| ---------------------------- | --- |
+| `has`/`set` walk             | 983 |
+| Prebuilt, still walked       | 744 |
+| Prebuilt and marked          | 435 |
+| No security headers          | 305 |
+
+The prebuilt-but-walked row is why the mark exists: the first touch of
+`response.headers` is most of the walk's cost.
+
+End to end, `oha -c 64` on a JSON route, three interleaved rounds, median share
+of raw `Bun.serve`: 84.9% before and 91.8% after. With `cors` as well, 73.7% and
+83.5%, since CORS routes now also stay on the direct path, behind a wrapper that
+is no longer `async`.
+
 ## Idempotency keys, on Bun 1.4.2
 
 Probed before `@Idempotent()` was built, against valkey 8 on loopback. Three
