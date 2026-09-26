@@ -1,9 +1,6 @@
 import type { JobsOptions, WorkerOptions as BullWorkerOptions } from 'bullmq';
-import {
-  assertRedisUrl,
-  defaultRedisUrl,
-  redactUrl,
-} from '../redis/options.js';
+import { redactUrl } from '@dunx/core';
+import { assertRedisUrl, defaultRedisUrl } from '../redis/options.js';
 import { QueueError, QueueErrorCode } from './errors.js';
 
 /**

@@ -83,6 +83,14 @@ describe('RedisOptions url', () => {
     expect((thrown as RedisError).message).toContain('redis:');
   });
 
+  /** A boot error is written by whatever logger is bound. */
+  it('keeps the password out of both failures', () => {
+    for (const url of ['http://app:hunter2@localhost:6379', '::hunter2::']) {
+      expect(() => new RedisOptions({ url })).toThrow(RedisError);
+      expect(() => new RedisOptions({ url })).not.toThrow(/hunter2/);
+    }
+  });
+
   it('redacts the password', () => {
     const options = new RedisOptions({
       url: 'redis://admin:s3cret@localhost:6379',

@@ -48,6 +48,13 @@ describe('PostgresRelay when Postgres is not there', () => {
     );
   });
 
+  it('keeps the password out of both failures', () => {
+    for (const url of ['redis://app:hunter2@localhost:6379', '::hunter2::']) {
+      expect(() => new PostgresRelay({ url })).toThrow();
+      expect(() => new PostgresRelay({ url })).not.toThrow(/hunter2/);
+    }
+  });
+
   it('redacts the password it was given', () => {
     expect(
       new PostgresRelay({ url: 'postgres://user:hunter2@localhost:5432/app' })

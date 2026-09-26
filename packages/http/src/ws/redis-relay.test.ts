@@ -48,6 +48,13 @@ describe('RedisRelay when Redis is not there', () => {
     );
   });
 
+  it('keeps the password out of both failures', () => {
+    for (const url of ['http://app:hunter2@localhost:6379', '::hunter2::']) {
+      expect(() => new RedisRelay({ url })).toThrow();
+      expect(() => new RedisRelay({ url })).not.toThrow(/hunter2/);
+    }
+  });
+
   it('redacts the password it was given', () => {
     expect(
       new RedisRelay({ url: 'redis://user:hunter2@localhost:6379' }).url,

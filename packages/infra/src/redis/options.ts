@@ -1,3 +1,4 @@
+import { assertUrl, redactUrl } from '@dunx/core';
 import { RedisError, RedisErrorCode } from './errors.js';
 
 /**
@@ -55,42 +56,28 @@ export interface RedisOptionsInit {
  * must reject a bad one with the same message rather than a second implementation
  * of the same check.
  */
-export const assertRedisUrl = (url: string): string => {
-  let parsed: URL;
-  try {
-    parsed = new URL(url);
-  } catch {
-    throw new RedisError(
-      RedisErrorCode.INVALID_URL,
-      `${JSON.stringify(url)} is not a valid URL. Expected something like ` +
-        'redis://localhost:6379.',
-    );
-  }
-
+export const assertRedisUrl = (url: string): string =>
   // Bun accepts an unparseable string here and only fails later, at connect time,
   // as an opaque "Connection closed" - so both checks happen up front instead.
-  if (!(REDIS_PROTOCOLS as readonly string[]).includes(parsed.protocol)) {
-    throw new RedisError(
-      RedisErrorCode.INVALID_URL,
-      `Unsupported protocol ${JSON.stringify(parsed.protocol)} in ` +
-        `${JSON.stringify(url)}. Expected one of ${REDIS_PROTOCOLS.join(', ')}.`,
-    );
-  }
-
-  return url;
-};
+  assertUrl(
+    url,
+    REDIS_PROTOCOLS,
+    (problem) =>
+      new RedisError(
+        RedisErrorCode.INVALID_URL,
+        problem.kind === 'invalid'
+          ? 'The Redis url is not a valid URL. Expected something like ' +
+              'redis://localhost:6379. Check $VALKEY_URL, $REDIS_URL, or the ' +
+              '`url` passed in.'
+          : `Unsupported protocol ${JSON.stringify(problem.protocol)} in ` +
+              `${problem.redacted}. Expected one of ${REDIS_PROTOCOLS.join(', ')}.`,
+      ),
+  );
 
 /**
  * A class, not an interface, so it is a runtime value and can therefore be a
  * constructor parameter type that `@dunx/transform` can record.
  */
-/** Strips the password from a URL, for logs and error messages. */
-export const redactUrl = (url: string): string => {
-  const parsed = new URL(url);
-  if (parsed.password) parsed.password = '***';
-  return parsed.toString();
-};
-
 export class RedisOptions {
   readonly url: string;
   readonly name: string | undefined;
