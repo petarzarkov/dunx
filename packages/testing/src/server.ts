@@ -13,7 +13,7 @@ import {
 } from '@dunx/http';
 import { discoverRoutes } from '@dunx/http/internal';
 import { appOptions, testRoot, type TestAppOptions } from './app.js';
-import { testClient, type TestClient } from './client.js';
+import { TestClient } from './client.js';
 
 export interface TestServerOptions
   extends TestAppOptions, Omit<HttpOptions, 'port' | 'overrides'> {
@@ -28,15 +28,26 @@ export interface TestServerOptions
   readonly prefix?: string | undefined;
 }
 
-export interface TestServer extends TestClient {
+/** A {@link TestClient} bound to the server `createTestServer` started. */
+export class TestServer extends TestClient {
   readonly app: HttpApp;
   /**
    * Where the gateways answer, when `gatewayPort` split them off `url`.
    * `undefined` otherwise, which is when they are on `url` itself.
    */
   readonly gatewayUrl: string | undefined;
-  /** `app.shutdown()` - stops the server, then tears the container down. */
-  close(): Promise<void>;
+
+  constructor(app: HttpApp, url: string) {
+    super(url);
+    this.app = app;
+    this.gatewayUrl = app.gatewayUrl;
+  }
+
+  /**
+   * `app.shutdown()` - stops the server, then tears the container down. An arrow,
+   * so `afterAll(server.close)` still has its receiver.
+   */
+  readonly close = (): Promise<void> => this.app.shutdown();
 }
 
 const middlewareShaped = (ctor: Ctor<unknown>): boolean =>
@@ -173,10 +184,5 @@ export const createTestServer = async (
     );
   if (prefix !== undefined) app.setGlobalPrefix(prefix);
 
-  return {
-    ...testClient(await app.listen()),
-    app,
-    gatewayUrl: app.gatewayUrl,
-    close: () => app.shutdown(),
-  };
+  return new TestServer(app, await app.listen());
 };

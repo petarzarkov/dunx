@@ -25,22 +25,6 @@ const timestamp = (): string => {
 };
 
 /**
- * Pending `info`-and-below output, shared by every instance because they all write
- * to the same descriptor - separate buffers would interleave two loggers' lines.
- */
-let pending = '';
-let scheduled = false;
-let hooked = false;
-
-const flushPending = (): void => {
-  scheduled = false;
-  if (pending === '') return;
-  const batch = pending;
-  pending = '';
-  console.log(batch);
-};
-
-/**
  * A `write(2)` per entry cost 1.84 us, the largest single component of request
  * logging; concatenating and writing once per event-loop turn costs 0.27 us.
  *
@@ -51,20 +35,41 @@ const flushPending = (): void => {
  *
  * `new ConsoleLogger(context, level, false)` opts out.
  */
-const emit = (line: string, toError: boolean): void => {
-  if (toError) {
-    flushPending();
-    console.error(line);
-    return;
+class StdoutBatch {
+  #pending = '';
+  #scheduled = false;
+  #hooked = false;
+
+  /** An arrow, since the timer and the `exit` hook call it detached. */
+  readonly flush = (): void => {
+    this.#scheduled = false;
+    if (this.#pending === '') return;
+    const batch = this.#pending;
+    this.#pending = '';
+    console.log(batch);
+  };
+
+  emit(line: string, toError: boolean): void {
+    if (toError) {
+      this.flush();
+      console.error(line);
+      return;
+    }
+    this.#pending = this.#pending === '' ? line : `${this.#pending}\n${line}`;
+    if (this.#scheduled) return;
+    this.#scheduled = true;
+    setTimeout(this.flush, 0).unref();
+    if (this.#hooked) return;
+    this.#hooked = true;
+    process.on('exit', this.flush);
   }
-  pending = pending === '' ? line : `${pending}\n${line}`;
-  if (scheduled) return;
-  scheduled = true;
-  setTimeout(flushPending, 0).unref();
-  if (hooked) return;
-  hooked = true;
-  process.on('exit', flushPending);
-};
+}
+
+/**
+ * Shared by every instance because they all write to the same descriptor:
+ * separate buffers would interleave two loggers' lines.
+ */
+const stdout = new StdoutBatch();
 
 /**
  * The default binding for {@link Logger}, so `Logger` is injectable in an app
@@ -121,11 +126,11 @@ export class ConsoleLogger extends Logger implements OnShutdown {
 
   /** Writes everything buffered at `info` and below. Idempotent. */
   flush(): void {
-    flushPending();
+    stdout.flush();
   }
 
   onShutdown(): void {
-    flushPending();
+    stdout.flush();
   }
 
   #write(level: LogLevel, message: unknown, rest: readonly unknown[]): void {
@@ -135,12 +140,12 @@ export class ConsoleLogger extends Logger implements OnShutdown {
     // and the replacement that handles cycles is one import away.
     const line = JSON.stringify(this.#entry(level, message, rest));
     if (!this.#buffered) {
-      flushPending();
+      stdout.flush();
       if (isErrorLevel(level)) console.error(line);
       else console.log(line);
       return;
     }
-    emit(line, isErrorLevel(level));
+    stdout.emit(line, isErrorLevel(level));
   }
 
   /**

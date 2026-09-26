@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'bun:test';
 import { ConsoleLogger, Logger, Module, provide } from '@dunx/core';
 import { Controller, Delete, Get, Post } from '../route/decorators.js';
-import { crossOriginCheck, trustedOriginSet } from './csrf.js';
+import { CrossOriginCheck, trustedOriginSet } from './csrf.js';
 import { ThrottledWarning } from './throttled-warning.js';
 import { HttpFactory } from './factory.js';
 import type { HttpOptions } from './options.js';
@@ -413,8 +413,9 @@ describe('trusted origins', () => {
   });
 });
 
-describe('crossOriginCheck', () => {
-  const refusal = crossOriginCheck({}, false);
+describe('CrossOriginCheck', () => {
+  const check = new CrossOriginCheck({}, false);
+  const refusal = (req: Request) => check.refusal(req);
   const allows = (req: Request): boolean => refusal(req) === undefined;
   const request = (headers: Record<string, string>): Request =>
     new Request('http://app.test/x', { method: 'POST', headers });
@@ -441,12 +442,12 @@ describe('crossOriginCheck', () => {
   });
 
   it('counts X-Forwarded-Host from the right by the hop count', () => {
-    const behindTwo = crossOriginCheck({}, 2);
+    const behindTwo = new CrossOriginCheck({}, 2);
     const req = request({
       origin: 'https://shop.example',
       'x-forwarded-host': 'evil.test, shop.example, edge.internal',
     });
-    expect(behindTwo(req)).toBeUndefined();
+    expect(behindTwo.refusal(req)).toBeUndefined();
     expect(refusal(req)).toBe('origin-mismatch');
   });
 
