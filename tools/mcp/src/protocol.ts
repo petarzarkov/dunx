@@ -318,9 +318,13 @@ export const handle = async (
       );
       // Text content holding JSON, which is what a client can both show and parse,
       // beside the object itself for a client that reads `structuredContent`.
+      // Any value that serialises to a JSON object, not only a plain one: a
+      // `ToolDefinition` is public, and a tool may answer with a class instance.
+      const structured =
+        typeof output === 'object' && output !== null && !Array.isArray(output);
       return reply(call.id, {
         content: [{ type: 'text', text: JSON.stringify(output, null, 2) }],
-        ...(isPlainObject(output) ? { structuredContent: output } : {}),
+        ...(structured ? { structuredContent: output } : {}),
       });
     } catch (error) {
       return toolError(call.id, String(error));
