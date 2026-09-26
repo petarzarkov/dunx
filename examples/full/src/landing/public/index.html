@@ -138,8 +138,10 @@
             raised, before the handler runs.
           </p>
           <pre class="code">
-// users.schemas.ts
-export const createUser = { body: CreateUser, response: { 201: User } };
+export const createUser = {
+  body: CreateUser,
+  response: { 201: User },
+};
 
 @Post('/', createUser)
 create({ body }: Input&lt;typeof createUser&gt;) { ... }</pre>
@@ -177,7 +179,11 @@ create({ body }: Input&lt;typeof createUser&gt;) { ... }</pre>
             going.
           </p>
           <pre class="code">
-@Deprecated({ since: '2026-09-01', sunset: '2027-03-01', link })
+@Deprecated({
+  since: '2026-09-01',
+  sunset: '2027-03-01',
+  link,
+})
 @Controller('swatches', { version: '1' })
 
 @Controller('swatches', { version: '2' })</pre>
@@ -247,9 +253,13 @@ create({ body }: Input&lt;typeof createUser&gt;) { ... }</pre>
 @Roles('admin')
 @UseGuards(AuthGuard)
 @Controller('reports')
-  @Public() @Get('/health')         // anyone
-  @Get('/')                         // any caller with credentials
-  @UseGuards(RolesGuard) @Post('/') // admin only</pre>
+
+  // anyone
+  @Public() @Get('/health')
+  // any caller with credentials
+  @Get('/')
+  // admin only
+  @UseGuards(RolesGuard) @Post('/')</pre>
           <div class="row">
             <button id="g-public">Public route</button>
             <button id="g-read">Needs a role</button>
@@ -282,8 +292,10 @@ create({ body }: Input&lt;typeof createUser&gt;) { ... }</pre>
             the server reads back.
           </p>
           <pre class="code">
-this.signed.set(req.cookies, 'prefs', body.theme, { maxAge });
-this.signed.get(req.cookies, 'prefs'); // undefined if tampered</pre>
+this.signed.set(req.cookies, 'prefs', theme);
+
+// undefined if the visitor edited it
+this.signed.get(req.cookies, 'prefs');</pre>
           <div class="row">
             <button id="pref-dark">Dark</button>
             <button id="pref-light">Light</button>

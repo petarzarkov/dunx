@@ -872,10 +872,12 @@ $('sec-csrf').addEventListener('click', async (event) => {
       show($('sec-out'), rows);
       return;
     }
+    // One caller per two lines rather than padded columns, which wrap into
+    // noise at phone width.
     const lines = rows.map(
       (row) =>
-        `Sec-Fetch-Site: ${(row.secFetchSite ?? '(absent)').padEnd(11)} ` +
-        `${row.caller.padEnd(22)} -> ${row.status} ` +
+        `${row.secFetchSite ?? 'no header'}: ${row.caller}\n` +
+        `   ${row.status} ` +
         (row.status === 403 ? 'refused' : 'let through, then validated'),
     );
     show(

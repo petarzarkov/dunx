@@ -419,8 +419,30 @@ footer {
   section {
     padding: 18px 16px;
   }
+  /* Not pinned: three rows of pills would hold a third of a phone screen. */
   header.top {
+    position: static;
     padding: 10px 16px;
+  }
+  /* The overall status and uptime, plus any check that is not up. */
+  .strip .pill:nth-child(n + 3):not(:has(.down, .degraded)) {
+    display: none;
+  }
+  /* Pinned instead, so moving on never needs a scroll past the output. */
+  .pager {
+    position: sticky;
+    bottom: 0;
+    z-index: 1;
+    margin: 12px -16px 0;
+    padding: 10px 16px calc(10px + env(safe-area-inset-bottom));
+    background: var(--bg);
+    border-top: 1px solid var(--line);
+  }
+  .position {
+    font-size: 12px;
+  }
+  pre.code {
+    font-size: 12px;
   }
   table.routes {
     display: block;
