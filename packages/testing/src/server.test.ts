@@ -96,6 +96,14 @@ afterAll(async () => {
 });
 
 describe('createTestServer()', () => {
+  /** `afterAll(server.close)` is the common way to hand it over. */
+  it('closes when close is called detached from the server', async () => {
+    const fixture = await createTestServer({ modules: [EchoModule] });
+    const { close } = fixture;
+    await close();
+    await expect(fetch(fixture.url)).rejects.toThrow();
+  });
+
   it('binds a real server on an ephemeral port', async () => {
     const url = new URL(server.url);
 

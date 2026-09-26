@@ -43,10 +43,11 @@ export class TestServer extends TestClient {
     this.gatewayUrl = app.gatewayUrl;
   }
 
-  /** `app.shutdown()` - stops the server, then tears the container down. */
-  close(): Promise<void> {
-    return this.app.shutdown();
-  }
+  /**
+   * `app.shutdown()` - stops the server, then tears the container down. An arrow,
+   * so `afterAll(server.close)` still has its receiver.
+   */
+  readonly close = (): Promise<void> => this.app.shutdown();
 }
 
 const middlewareShaped = (ctor: Ctor<unknown>): boolean =>
