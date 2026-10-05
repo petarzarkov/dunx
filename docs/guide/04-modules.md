@@ -16,7 +16,10 @@ export class UsersModule {}
 ```
 
 `UsersRepository` is not on the `exports` line, so nothing outside `UsersModule`
-can resolve it.
+can resolve it. When another module resolves `UsersService`, its dependencies
+are still resolved inside `UsersModule`. This also applies to globally exported
+providers: their private dependencies stay private, regardless of module import
+order or bindings declared by a consumer.
 
 ## `@Module` is a marker
 

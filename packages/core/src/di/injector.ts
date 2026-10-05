@@ -36,6 +36,7 @@ class PendingSignal {
  */
 export class Injector {
   readonly #graph: ScopeGraph;
+  readonly #owners = new Map<Binding, Scope>();
   readonly #instances = new Map<Binding, unknown>();
   readonly #settling = new Map<Binding, Promise<unknown>>();
   readonly #building: { binding: Binding; token: InjectionToken<unknown> }[] =
@@ -46,6 +47,11 @@ export class Injector {
 
   constructor(graph: ScopeGraph) {
     this.#graph = graph;
+    for (const scope of graph.ordered) {
+      for (const binding of scope.own.values()) {
+        this.#owners.set(binding, scope);
+      }
+    }
   }
 
   get graph(): ScopeGraph {
@@ -112,7 +118,10 @@ export class Injector {
 
     this.#building.push({ binding, token: key });
     try {
-      return this.#instantiate(binding, scope) as T;
+      return this.#instantiate(
+        binding,
+        this.#owners.get(binding) ?? scope,
+      ) as T;
     } finally {
       this.#building.pop();
     }
