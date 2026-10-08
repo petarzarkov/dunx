@@ -4,6 +4,36 @@ Every release, newest first. Written by `bun run version` from the commits in th
 release range. Every @dunx package shares one version and ships together, so a
 release covers all of them.
 
+## 3.10.2 - 2026-10-08
+
+Providers resolve their dependencies in the module that declares them
+
+A globally exported provider with private dependencies could fail to boot
+depending only on import order, because it was built in the scope of
+whichever module asked for it first. The injector now builds each declared
+provider in its owning module's scope, so its private dependencies stay
+reachable and a consumer's binding for the same token is not picked up.
+
+An app-level override of an exported provider keeps that owner too: the
+importing modules now share the owner's substitute binding, so the override
+resolves its dependencies in the declaring module and stays one instance.
+
+### Fixes
+
+- **core**: keep the declaring scope for an overridden exported provider ([`b17bcb6`](https://github.com/petarzarkov/dunx/commit/b17bcb6f4f5e1ee4bc15163bc7edd9ae1328600e))
+- **core**: resolve providers in their declaring module scope ([`87077ef`](https://github.com/petarzarkov/dunx/commit/87077efbff1c64ecfa50857edb2bbb17dd034659))
+
+### Documentation
+
+- **mcp**: refresh module scope guidance ([`2205470`](https://github.com/petarzarkov/dunx/commit/2205470e54db632f7f0ca163f0fff14eb679f945))
+- address review on the plain-language pass ([`dcecc4c`](https://github.com/petarzarkov/dunx/commit/dcecc4cd6a9db2c902eb2ced11490b57ab613c60))
+- plain-language pass over the guides and the remaining READMEs ([`d9c0314`](https://github.com/petarzarkov/dunx/commit/d9c0314af1829da4bf3006fc4529e520f6789841))
+- plain-language pass on three package READMEs and the Nest migration guide ([`50b15dd`](https://github.com/petarzarkov/dunx/commit/50b15dd932fff7e513610fd590170ea62256b177))
+
+### Other changes
+
+- **review**: skip the push review on fork pull requests ([`bb316f1`](https://github.com/petarzarkov/dunx/commit/bb316f10683dfd9436679733c0ed822328030a86))
+
 ## 3.10.1 - 2026-09-26
 
 Connection passwords kept out of url boot errors, shared helpers, and faster CORS and security headers
