@@ -60,9 +60,14 @@ jobs:
     # The loop guard, and it is load bearing: dunxonu posts with a real user's
     # token, so its own reviews and replies raise these same events. A comment
     # posted with GITHUB_TOKEN would not.
+    #
+    # A fork's `pull_request` run gets no secrets, so it skips; a comment
+    # naming @dunxonu on that pull request still runs with them.
     if: >-
       github.event.sender.login != 'dunxonu' &&
-      (github.event_name != 'pull_request' || github.event.pull_request.draft == false)
+      (github.event_name != 'pull_request' ||
+        (github.event.pull_request.draft == false &&
+          github.event.pull_request.head.repo.full_name == github.repository))
     timeout-minutes: 15
     permissions:
       contents: read
