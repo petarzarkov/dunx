@@ -49,6 +49,23 @@ describe('provider construction scope', () => {
     });
   }
 
+  it('resolves an overridden global provider in its declaring scope', async () => {
+    class FakeShared extends SharedService {}
+    @Module({ imports: [FeatureModule, SharedModule] })
+    class Root {}
+
+    const app = await AppFactory.create(Root, {
+      overrides: [provide(SharedService, { useClass: FakeShared })],
+    });
+    try {
+      expect(app.get(Consumer).shared).toBeInstanceOf(FakeShared);
+      expect(app.get(Consumer).shared.config).toBe('owner-config');
+      expect(app.get(Consumer).shared).toBe(app.get(SharedService));
+    } finally {
+      await app.shutdown();
+    }
+  });
+
   it('does not use a consumer override for an imported provider', () => {
     @Module({
       providers: [SharedService, provide(PrivateConfig, { useValue: 'owner' })],
