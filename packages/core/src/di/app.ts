@@ -250,6 +250,7 @@ export class AppFactory {
      * scopes bind a token differently and only one is meant, the test resolves
      * through the module it cares about instead.
      */
+    const substitutes = new Map<Binding, Binding>();
     for (const scope of graph.ordered) {
       for (const [token, binding] of scope.own) {
         const override = overrides.get(token);
@@ -259,17 +260,17 @@ export class AppFactory {
           module: binding.module,
         };
         scope.own.set(token, substituted);
+        substitutes.set(binding, substituted);
         replaced.add(token);
       }
-      // `visible` was flattened earlier, so a substituted import is re-pointed.
-      for (const [token] of scope.visible) {
-        const override = overrides.get(token);
-        if (!override) continue;
-        scope.visible.set(token, {
-          provider: override.provider,
-          module: scope.visible.get(token)?.module ?? '(override)',
-        });
-        replaced.add(token);
+    }
+    // `visible` was flattened earlier, so an import is re-pointed at the same
+    // substitute its owner holds, which keeps the injector's owner lookup.
+    for (const scope of graph.ordered) {
+      for (const [token, binding] of scope.visible) {
+        if (!overrides.has(token)) continue;
+        const substituted = substitutes.get(binding);
+        if (substituted) scope.visible.set(token, substituted);
       }
     }
 
