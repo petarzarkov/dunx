@@ -236,7 +236,7 @@ get the 304. `entityTag(body, weak)` computes the same tag `etag` would.
 - **A 304 keeps the 200's headers** without its body or `content-length`. CORS,
   `securityHeaders`, `traceresponse`, a version's `Vary` and any
   [cookie](./35-cookies.md) the handler set are on it.
-- **Under `Compression` the tag describes the unencoded bytes**, so gzip, zstd
+- **Under `Compression` the tag describes the unencoded bytes**, so zstd, br, gzip
   and identity share one. `Compression` weakens a strong tag it encodes, skips a
   304 and adds `Vary: accept-encoding` to it.
 - **`If-Match` is not evaluated.** A precondition on a `PUT` has to be checked

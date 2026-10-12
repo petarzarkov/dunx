@@ -569,20 +569,19 @@ const encoded = async (
 };
 
 it('encodes a large document with the coding the client accepts', async () => {
-  const zstd = await encoded('openapi.json', 'zstd');
-  expect(zstd.encoding).toBe('zstd');
-  expect(zstd.wire).toBeLessThan(zstd.body.length);
-  // Decoded by fetch, so the document survived the round trip intact.
-  expect(JSON.parse(zstd.body).openapi).toBe('3.1.0');
-
-  const gzip = await encoded('openapi.json', 'gzip');
-  expect(gzip.encoding).toBe('gzip');
-  expect(gzip.wire).toBeLessThan(gzip.body.length);
+  for (const coding of ['zstd', 'br', 'gzip']) {
+    const sent = await encoded('openapi.json', coding);
+    expect(sent.encoding).toBe(coding);
+    expect(sent.wire).toBeLessThan(sent.body.length);
+    // Decoded by fetch, so the document survived the round trip intact.
+    expect(JSON.parse(sent.body).openapi).toBe('3.1.0');
+  }
 });
 
 it('breaks a q-value tie with the server preference order', async () => {
-  // Both offered at q=1, and the app offers ['zstd', 'gzip'].
+  // All at q=1 against ['zstd', 'br', 'gzip']; Safari's header has no zstd.
   expect((await encoded('openapi.json', 'gzip, zstd')).encoding).toBe('zstd');
+  expect((await encoded('openapi.json', 'gzip, br')).encoding).toBe('br');
   // An explicit q-value outranks that order.
   expect(
     (await encoded('openapi.json', 'zstd;q=0.1, gzip;q=0.9')).encoding,

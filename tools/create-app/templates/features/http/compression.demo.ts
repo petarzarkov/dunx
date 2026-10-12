@@ -50,7 +50,7 @@ export class CompressionDemo {
     }
 
     // `identity` is a coding the app does not offer, so nothing is picked.
-    for (const accept of ['identity', 'gzip', 'zstd', 'gzip, zstd']) {
+    for (const accept of ['identity', 'gzip', 'br', 'zstd', 'gzip, zstd']) {
       const m = await measure(url, DOCUMENT, accept);
       logger.info(
         `accept-encoding: ${accept.padEnd(11)} -> ${m.encoding.padEnd(8)} ` +
@@ -58,11 +58,15 @@ export class CompressionDemo {
       );
     }
 
-    // Same q, so the server's order decides: `['zstd', 'gzip']`.
+    // Same q, so the server's order decides: `['zstd', 'br', 'gzip']`.
     const preferred = await measure(url, DOCUMENT, 'gzip, zstd');
     logger.info(
       `a tie in the client's q-values is broken by the server order -> ${preferred.encoding}`,
     );
+
+    // What Safari sends: no zstd, so brotli rather than gzip.
+    const safari = await measure(url, DOCUMENT, 'gzip, deflate, br');
+    logger.info(`gzip, deflate, br (Safari) -> ${safari.encoding}`);
 
     const forced = await measure(url, DOCUMENT, 'zstd;q=0.1, gzip;q=0.9');
     logger.info(`zstd;q=0.1, gzip;q=0.9 -> ${forced.encoding}`);

@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'bun:test';
 import type { BunRequest } from 'bun';
+import { brotliDecompressSync } from 'node:zlib';
 import type { RouteContext } from '../server/context.js';
 import { Compression } from './compression.js';
 import { negotiate } from './negotiate.js';
@@ -85,8 +86,12 @@ describe('the codings offered', () => {
    * what the header means - so the buffered and streaming paths disagreed and
    * the format flipped at the 1 MiB threshold. Measured on Bun 1.4.0.
    */
-  it('is zstd and gzip, and nothing Bun encodes two ways', () => {
-    expect(Object.values(CompressionEncoding)).toEqual(['zstd', 'gzip']);
+  it('is zstd, br and gzip, and nothing Bun encodes two ways', () => {
+    expect(Object.values(CompressionEncoding)).toEqual(['zstd', 'br', 'gzip']);
+  });
+
+  it('offers all three by default on a Bun that honours the brotli level', () => {
+    expect(new CompressionOptions().encodings).toEqual(['zstd', 'br', 'gzip']);
   });
 
   it('sends nothing to a client that only takes deflate', async () => {
@@ -98,9 +103,11 @@ describe('the codings offered', () => {
     expect(
       () =>
         new CompressionOptions({
-          encodings: ['br' as unknown as (typeof CompressionEncoding)['GZIP']],
+          encodings: [
+            'compress' as unknown as (typeof CompressionEncoding)['GZIP'],
+          ],
         }),
-    ).toThrow(/cannot encode br/);
+    ).toThrow(/cannot encode compress/);
   });
 });
 
@@ -143,6 +150,31 @@ describe('Compression', () => {
     expect(res.headers.get('content-encoding')).toBe('gzip');
     const bytes = new Uint8Array(await res.arrayBuffer());
     expect(text(Bun.gunzipSync(bytes))).toBe(body);
+  });
+
+  it('sends br to a client without zstd, which is Safari', async () => {
+    const res = await run(request('gzip, deflate, br'), json());
+    expect(res.headers.get('content-encoding')).toBe('br');
+    const bytes = new Uint8Array(await res.arrayBuffer());
+    expect(res.headers.get('content-length')).toBe(String(bytes.byteLength));
+    expect(text(brotliDecompressSync(bytes))).toBe(body);
+  });
+
+  /**
+   * A declared length past the buffer limit takes the streaming encoder, so the
+   * same body goes through both. Equal bytes are what keep the format from
+   * shifting at the limit, the way `deflate`'s did.
+   */
+  it('encodes br to the same bytes buffered and streamed', async () => {
+    const buffered = await run(request('br'), json());
+    const streamed = await run(
+      request('br'),
+      json({ headers: { 'content-length': String(2 * 1024 * 1024) } }),
+    );
+    expect(streamed.headers.get('content-length')).toBeNull();
+    expect(new Uint8Array(await streamed.arrayBuffer())).toEqual(
+      new Uint8Array(await buffered.arrayBuffer()),
+    );
   });
 
   it('varies on accept-encoding even when it does not encode', async () => {

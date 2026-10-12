@@ -74,7 +74,7 @@ Each row links to the guide that covers it.
 | Throttling              | `@Throttle`, `@SkipThrottle`, memory and Redis counters     | [Middleware and guards](../../docs/guide/08-middleware-and-guards.md) |
 | Outbound resilience     | `HttpRetryClassifier`: which statuses retry, and `Retry-After` | [Resilience](../../docs/guide/26-resilience.md)                |
 | Static files            | `Bun.file` behind a mount, with a cache policy              | [Deployment](../../docs/guide/21-deployment.md)                   |
-| Compression             | zstd and gzip on Bun's own compressors                      | [Deployment](../../docs/guide/21-deployment.md)                   |
+| Compression             | zstd, brotli and gzip on Bun's own compressors              | [Deployment](../../docs/guide/21-deployment.md)                   |
 | RPC                     | protobuf over Connect and gRPC-Web, as middleware           | [RPC](../../docs/guide/28-rpc.md)                                 |
 
 ## Subpaths
