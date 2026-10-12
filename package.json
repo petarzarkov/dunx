@@ -45,12 +45,12 @@
     "version:dry-run": "DRY_RUN=true bun ./scripts/version.ts"
   },
   "devDependencies": {
-    "@stagelint/stagelint": "0.1.4",
-    "@types/bun": "1.4.1",
-    "@types/node": "26.4.1",
-    "oxfmt": "0.66.0",
-    "oxlint": "1.81.0",
-    "oxlint-tsgolint": "7.0.2001",
+    "@stagelint/stagelint": "0.2.1",
+    "@types/bun": "1.4.3",
+    "@types/node": "26.6.5",
+    "oxfmt": "0.72.0",
+    "oxlint": "1.87.0",
+    "oxlint-tsgolint": "7.0.2004",
     "typescript": "7.0.2"
   }
 }

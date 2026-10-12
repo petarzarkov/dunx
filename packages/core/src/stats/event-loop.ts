@@ -1,4 +1,4 @@
-import { monitorEventLoopDelay, type IntervalHistogram } from 'node:perf_hooks';
+import { monitorEventLoopDelay, type ELDHistogram } from 'node:perf_hooks';
 import type { OnInit, OnShutdown } from '../di/lifecycle.js';
 import { snapshotOf, type HistogramSnapshot } from './histogram.js';
 
@@ -30,7 +30,7 @@ export class EventLoopLagOptions {
  * `undefined` under Bun.
  */
 export class EventLoopLag implements OnInit, OnShutdown {
-  readonly #histogram: IntervalHistogram;
+  readonly #histogram: ELDHistogram;
   #enabled = false;
 
   constructor(options: EventLoopLagOptions = new EventLoopLagOptions()) {

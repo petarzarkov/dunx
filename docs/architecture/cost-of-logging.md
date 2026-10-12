@@ -384,7 +384,7 @@ the figures above. What they established:
 - **The `AsyncLocalStorage` scope stopped being expensive** on 1.4.0: 0.91 us on
   1.3.14, 0.24 us on 1.4.0. Bun 1.4.1 then removed the per-`await` charge (6.5 ns to
   0; method in [bun-apis.md](../bun-apis.md)), so `requestLogging: { correlate:
-false }` buys nothing measurable for a handler of any depth.
+  false }` buys nothing measurable for a handler of any depth.
 - **Request-body logging costs a `Request.clone()`, not a parse.** On a `POST`
   ladder (`bun run logging:bodies`, 1.4.0), `requestBody: true` added 1.87 us on a
   route declaring a `body` schema and 28.81 us on one without. Cloning an unread

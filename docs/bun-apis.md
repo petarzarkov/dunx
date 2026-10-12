@@ -372,7 +372,7 @@ accepted by everything that would have taken `deflate`. `Bun.gzipSync` and
   are callable functions; `unsafe`, `begin`, `close`, `connect`, `options`,
   `reserve` are own properties of the _instance_. Probing the prototype throws, and
   `s instanceof Bun.SQL` throws `TypeError: instanceof called on an object with an
-invalid prototype property`. Narrow on `options.adapter`, or hold the client on a
+  invalid prototype property`. Narrow on `options.adapter`, or hold the client on a
   class you own. Still true on 1.4.0.
 - **`typeof new Bun.SQL(url)` is `'function'`**, since the client is callable as a
   tagged template. A `typeof x === 'object'` guard skips the whole Postgres backend.
@@ -780,7 +780,7 @@ real pattern nothing.
 - `presign()` is **synchronous and offline**: HMAC over the canonical request.
 - `stat()` → `{ size, lastModified: Date, etag, type }`, not an fs `Stats`.
 - `write()` accepts `string | ArrayBufferView | ArrayBuffer | Request | Response |
-BunFile | S3File | Blob | File | Archive`, and **not** `ReadableStream`, still on
+  BunFile | S3File | Blob | File | Archive`, and **not** `ReadableStream`, still on
   1.4.1. A streaming upload goes through `file().writer()`, which returns a multipart
   `NetworkSink`, so `S3Storage` keeps that sink and `pump` with it.
 

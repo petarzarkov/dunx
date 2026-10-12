@@ -100,7 +100,7 @@ not account for:
 
 ```js
 if (!this.ready) {
-  await (this.readying ?? this._handleConnected());
+  await(this.readying ?? this._handleConnected());
 }
 ```
 

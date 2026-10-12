@@ -354,7 +354,7 @@ Two other failures are not validation failures and do not carry issues:
   rejected, so there was never a value to validate.
 - An undeclared content type is
   `415 Unsupported content type "application/xml". Declared bodies accept
-application/json, application/x-www-form-urlencoded, multipart/form-data or text/*.`
+  application/json, application/x-www-form-urlencoded, multipart/form-data or text/*.`
 
 Replace all of it by passing `onError` to `HttpFactory.create`; see
 [Middleware and guards](./08-middleware-and-guards.md#the-error-mapper).
