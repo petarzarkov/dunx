@@ -103,11 +103,14 @@ and deletes.
 ## What two nodes see
 
 L1 is local and L2 is shared. `del` on one node clears that node's L1 and the shared L2;
-every other node keeps serving its own L1 copy until its entry expires. Set
-`local.ttl` to bound that lifetime for both writes and L2 hits promoted into L1.
-Without it, writes use the lifetime passed to `set` or `wrap`, while promoted
-entries use the constructor's `ttl`. Give a route that can tolerate no local
-staleness a `RedisCacheStore` with no L1 in front of it.
+every other node keeps serving its own L1 copy until its entry expires.
+
+Set `local.ttl` to bound that lifetime for both writes and L2 hits promoted into
+L1. Without it, writes use the lifetime passed to `set` or `wrap`, while promoted
+entries use the constructor's `ttl`.
+
+Give a route that can tolerate no local staleness a `RedisCacheStore` with no L1
+in front of it.
 
 ## Async options
 
