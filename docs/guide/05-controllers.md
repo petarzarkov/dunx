@@ -147,8 +147,8 @@ mounting at the root.
 ### A generic base controller
 
 Routes declared on an abstract base are served by every subclass. A subclass
-picks which of them it serves with `include` and `exclude`, by handler name.
-`include` applies first, then `exclude`:
+picks which of them it serves with `includes` and `excludes`, by handler name.
+`includes` applies first, then `excludes`:
 
 ```ts
 abstract class CrudController<T extends Row> {
@@ -165,7 +165,7 @@ abstract class CrudController<T extends Row> {
   }
 }
 
-@Controller('colors', { exclude: ['remove'] })
+@Controller('colors', { excludes: ['remove'] })
 class ColorsController extends CrudController<Color> {
   constructor(store: ColorsStore) {
     super(store);
@@ -173,9 +173,11 @@ class ColorsController extends CrudController<Color> {
 }
 ```
 
-The filter belongs to the class, not to a constructor argument. OpenAPI, the
-dashboard and `@dunx/mcp` read routes without constructing the controller, so a
-filter passed to `super()` would never reach them.
+The filter belongs to the class, not to a constructor argument. The deprecated
+`include` and `exclude` aliases are still accepted, but `includes` and `excludes`
+take precedence when both forms are supplied. OpenAPI, the dashboard and `@dunx/mcp`
+read routes without constructing the controller, so a filter passed to `super()`
+would never reach them.
 
 A method name the class does not have fails to compile. A method that is not a
 route fails at boot. Subclasses inherit the filter, and a subclass that applies
