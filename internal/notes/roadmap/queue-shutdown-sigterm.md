@@ -45,6 +45,27 @@ That is the same un-timed await
 `pause()`, reached from a single worker and a server that was never up. Reproduced
 on bullmq 6.3.2 as well as the 6.0.5 this repo pins.
 
+## Re-measured on Bun 1.4.3 (rev c6da4a4d3), bullmq 6.3.4 and 6.3.13
+
+Nothing moved. Measured 2026-10-12, natural exit, no `ShutdownHooks`:
+
+| Case                                                     | 1.4.2           | 1.4.3           |
+| -------------------------------------------------------- | --------------- | --------------- |
+| dunx app, `QueueModule` on a refused Redis, bullmq 6.3.4 | never exits     | never exits     |
+| the same app on bullmq 6.3.13                            | -               | never exits     |
+| bullmq#4656's ioredis repro, 6.3.4 and 6.3.13            | `close()` hangs | `close()` hangs |
+
+In the dunx rows `start()` rejects and `shutdown()` resolves in under 10 ms, and an
+`unref()`d heartbeat keeps firing for the full 20 s, so something holds the loop
+without starving it. That is leak B.
+
+A raw `Worker` on `createBunRedisClient` against a server that was **never**
+reachable is a different symptom: one core at 100% and timers that never fire,
+on either bullmq version. dunx cannot reach it, because `start()` closes every worker
+it opened when one fails (the regression in `worker.test.ts`). A Redis that drops
+under a worker that **was** ready does not spin: over 6 s the worst timer lag was
+1 ms, 127 retries with backoff, and `close()` resolved.
+
 ## Re-measured on Bun 1.4.0 (rev 34cbb9a40), bullmq 6.0.5
 
 The file's own instruction is to re-measure on every Bun and bullmq bump. Half the
@@ -378,7 +399,8 @@ client would have done with a working connection, and it logs a line saying so.
 - **Leak B is filed and needs nothing:**
   [taskforcesh/bullmq#4656](https://github.com/taskforcesh/bullmq/issues/4656), open,
   with the **dunx app** from the re-measurement above as the reproduction rather than
-  the two-line snippet, which no longer hangs. Verified still open 2026-09-03.
+  the two-line snippet, which no longer hangs. Verified still open 2026-10-12;
+  its fix is [#4676](https://github.com/taskforcesh/bullmq/pull/4676), unmerged.
 - Re-measure on every Bun and bullmq bump, by natural exit rather than by `SIGTERM`.
   When leak B lands, the forced exit stops firing for this cause - the warning it
   logs is how you would notice.
