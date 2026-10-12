@@ -6,7 +6,7 @@ import { RedisCacheStore } from './redis.js';
 import { TieredCacheStore } from './tiered.js';
 
 const tiers = (
-  promoteTtl?: number,
+  ttl?: number,
 ): {
   l1: MemoryCacheStore;
   l2: RedisCacheStore;
@@ -20,11 +20,7 @@ const tiers = (
     l1,
     l2,
     redis,
-    store: new TieredCacheStore(
-      l1,
-      l2,
-      promoteTtl === undefined ? {} : { promoteTtl },
-    ),
+    store: new TieredCacheStore(l1, l2, ttl === undefined ? {} : { ttl }),
   };
 };
 
@@ -37,8 +33,117 @@ describe('TieredCacheStore', () => {
     expect(redis.entries.has('k')).toBe(true);
   });
 
-  it('caps the L1 lifetime at promoteTtl', async () => {
-    const { l1, redis, store } = tiers(50);
+  it('uses separate local and remote ttl values', async () => {
+    const l1 = new MemoryCacheStore();
+    const redis = new FakeRedis();
+    const store = new TieredCacheStore(l1, new RedisCacheStore(redis), {
+      local: { ttl: 50 },
+      remote: { ttl: 5_000 },
+    });
+
+    await store.set('k', 1, 1_000);
+    expect(redis.writes[0]?.px).toBe(5_000);
+
+    await Bun.sleep(80);
+    expect(await l1.get('k')).toBeUndefined();
+    expect(await store.get<number>('k')).toBe(1);
+  });
+
+  it('uses the shared ttl when a layer ttl is omitted', async () => {
+    const l1 = new MemoryCacheStore();
+    const redis = new FakeRedis();
+    const store = new TieredCacheStore(l1, new RedisCacheStore(redis), {
+      local: { ttl: 50 },
+      remote: { enabled: true },
+    });
+
+    await store.set('k', 1, 5_000);
+    expect(redis.writes[0]?.px).toBe(5_000);
+
+    await Bun.sleep(80);
+    expect(await l1.get('k')).toBeUndefined();
+    expect(await store.get<number>('k')).toBe(1);
+  });
+
+  it('falls back to the shared ttl for the local tier too', async () => {
+    const l1 = new MemoryCacheStore();
+    const redis = new FakeRedis();
+    const store = new TieredCacheStore(l1, new RedisCacheStore(redis), {
+      local: { enabled: true },
+      remote: { ttl: 5_000 },
+    });
+
+    await store.set('k', 1, 50);
+    expect(redis.writes[0]?.px).toBe(5_000);
+
+    await Bun.sleep(80);
+    expect(await l1.get('k')).toBeUndefined();
+    expect(await store.get<number>('k')).toBe(1);
+  });
+
+  it.each([Number.NaN, Number.POSITIVE_INFINITY, 0, -1])(
+    'rejects a layer ttl of %p',
+    (ttl) => {
+      expect(
+        () =>
+          new TieredCacheStore(new MemoryCacheStore(), new MemoryCacheStore(), {
+            local: { ttl },
+          }),
+      ).toThrow(AppError);
+    },
+  );
+
+  it.each([Number.NaN, Number.POSITIVE_INFINITY, 0, -1])(
+    'rejects a remote ttl of %p',
+    (ttl) => {
+      expect(
+        () =>
+          new TieredCacheStore(new MemoryCacheStore(), new MemoryCacheStore(), {
+            remote: { ttl },
+          }),
+      ).toThrow(AppError);
+    },
+  );
+
+  it('does not read or write a disabled local tier', async () => {
+    const l1 = new MemoryCacheStore();
+    const redis = new FakeRedis();
+    const store = new TieredCacheStore(l1, new RedisCacheStore(redis), {
+      local: { enabled: false },
+    });
+
+    await l1.set('k', 'stale', 5_000);
+    await store.set('k', 1, 5_000);
+    expect(await l1.get<string>('k')).toBe('stale');
+    expect(await store.get<number>('k')).toBe(1);
+    expect(await l1.get<string>('k')).toBe('stale');
+    expect(await store.del('k')).toBe(true);
+    expect(await l1.get<string>('k')).toBe('stale');
+    expect(redis.entries.has('k')).toBe(false);
+  });
+
+  it('does not read or write a disabled remote tier', async () => {
+    const l1 = new MemoryCacheStore();
+    const redis = new FakeRedis();
+    const store = new TieredCacheStore(l1, new RedisCacheStore(redis), {
+      remote: { enabled: false },
+    });
+
+    await store.set('k', 1, 5_000);
+    expect(redis.entries.has('k')).toBe(false);
+    expect(await store.get<number>('k')).toBe(1);
+    await new RedisCacheStore(redis).set('k', 'stale', 5_000);
+    expect(await store.del('k')).toBe(true);
+    expect(await store.get('k')).toBeUndefined();
+    expect(redis.entries.has('k')).toBe(true);
+  });
+
+  it('uses the local ttl for writes', async () => {
+    const l1 = new MemoryCacheStore();
+    const redis = new FakeRedis();
+    const store = new TieredCacheStore(l1, new RedisCacheStore(redis), {
+      local: { ttl: 50 },
+    });
     await store.set('k', 1, 5_000);
     expect(redis.writes[0]?.px).toBe(5_000);
 
@@ -49,9 +154,9 @@ describe('TieredCacheStore', () => {
   });
 
   it.each([Number.NaN, Number.POSITIVE_INFINITY, 0, -1])(
-    'rejects a promoteTtl of %p rather than promoting forever',
-    (promoteTtl) => {
-      expect(() => tiers(promoteTtl)).toThrow(AppError);
+    'rejects a tier ttl of %p rather than promoting forever',
+    (ttl) => {
+      expect(() => tiers(ttl)).toThrow(AppError);
     },
   );
 
@@ -108,7 +213,7 @@ describe('a write landing during a promote', () => {
   ) => {
     const l1 = new MemoryCacheStore();
     const tiered = new TieredCacheStore(l1, new SlowL2(), {
-      promoteTtl: 60_000,
+      ttl: 60_000,
     });
     await tiered.set('k', 'old', 60_000);
     await l1.del('k'); // the next read has to go to L2
@@ -123,7 +228,7 @@ describe('a write landing during a promote', () => {
   it('does not put a deleted value back into L1', async () => {
     const { l1, tiered } = await racing((t) => t.del('k'));
 
-    // The promote wrote `old` back for the whole promoteTtl, so a delete was
+    // The promote wrote `old` back for the whole configured ttl, so a delete was
     // undone for thirty seconds by default.
     expect(await tiered.get('k')).toBeUndefined();
     expect(await l1.get('k')).toBeUndefined();
@@ -140,7 +245,7 @@ describe('a write landing during a promote', () => {
     }
     const l1 = new MemoryCacheStore();
     const tiered = new TieredCacheStore(l1, new Staggered(), {
-      promoteTtl: 60_000,
+      ttl: 60_000,
     });
     await tiered.set('k', 'old', 60_000);
     await l1.del('k');

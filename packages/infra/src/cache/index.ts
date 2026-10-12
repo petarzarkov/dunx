@@ -13,4 +13,10 @@ export { CacheModule, type CacheModuleSettings } from './module.js';
 export { CacheOptions, type CacheOptionsInit } from './options.js';
 export { RedisCacheStore, type CacheRedis } from './redis.js';
 export { CacheStore } from './store.js';
-export { TieredCacheStore, type TieredCacheInit } from './tiered.js';
+export {
+  TieredCacheStore,
+  type CacheLayerOptions,
+  type TieredCacheOptions,
+  type LocalCacheOptions,
+  type RemoteCacheOptions,
+} from './tiered.js';
