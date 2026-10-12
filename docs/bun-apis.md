@@ -360,9 +360,25 @@ parser.
 
 `@dunx/http`'s `Compression` picks the sync encoder for a body it can buffer and
 `CompressionStream` for one it cannot, so offering `deflate` would change the wire
-format at the buffering threshold. It offers `zstd` and `gzip` only; `gzip` is
+format at the buffering threshold. It offers `zstd`, `br` and `gzip`; `gzip` is
 accepted by everything that would have taken `deflate`. `Bun.gzipSync` and
 `CompressionStream('gzip')` agree, and so do the two zstd encoders.
+
+### `CompressionStream` takes a `level` from 1.4.3
+
+Before 1.4.3 a `level` was accepted and ignored, so brotli always ran at quality 11.
+1.4.3 applies it and rejects one out of range, which is how `@dunx/http` detects
+that it is honoured. On a 6.2 KB JSON body:
+
+| Encoder                                     | Bytes | Time    |
+| ------------------------------------------- | ----- | ------- |
+| `Bun.zstdCompressSync`                      | 377   | 8.6 us  |
+| `Bun.gzipSync`                              | 593   | 17.3 us |
+| `node:zlib` `brotliCompressSync`, quality 4 | 327   | 30.7 us |
+| `CompressionStream('brotli')`, 1.4.2        | 309   | 4.3 ms  |
+
+`brotliCompressSync` and `CompressionStream('brotli', { level: 4 })` emit the same
+bytes, so brotli has the agreement `deflate` lacks. There is no `Bun.brotliCompressSync`.
 
 ## SQL
 

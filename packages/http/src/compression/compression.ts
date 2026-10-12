@@ -2,7 +2,11 @@ import type { BunRequest } from 'bun';
 import type { RouteContext } from '../server/context.js';
 import type { Middleware, Next } from '../server/middleware.js';
 import { negotiate } from './negotiate.js';
-import { CompressionEncoding, CompressionOptions } from './options.js';
+import {
+  CompressionOptions,
+  compressionStream,
+  encodeSync,
+} from './options.js';
 import { varyOn } from '../server/vary.js';
 
 /**
@@ -102,18 +106,6 @@ const weakenETag = (headers: Headers): void => {
 const varyOnEncoding = (headers: Headers): void =>
   varyOn(headers, 'accept-encoding');
 
-const encodeSync = (
-  encoding: CompressionEncoding,
-  data: Uint8Array<ArrayBuffer>,
-): Uint8Array => {
-  switch (encoding) {
-    case CompressionEncoding.ZSTD:
-      return Bun.zstdCompressSync(data);
-    case CompressionEncoding.GZIP:
-      return Bun.gzipSync(data);
-  }
-};
-
 /**
  * Response compression, on Bun's own compressors. Not installed by default, and
  * registered by the app rather than a module:
@@ -207,7 +199,7 @@ export class Compression implements Middleware {
       // The encoded length is not known until the stream ends.
       headers.delete('content-length');
       return new Response(
-        source.rest.pipeThrough(new CompressionStream(encoding)),
+        source.rest.pipeThrough(compressionStream(encoding)),
         { status: res.status, statusText: res.statusText, headers },
       );
     }
