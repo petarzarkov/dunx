@@ -241,7 +241,7 @@ describe('@Controller includes and excludes', () => {
       includes: ['getList'],
       excludes: [],
       include: ['getOne'],
-      exclude: ['remove'],
+      exclude: ['getList'],
     })
     class Canonical extends Crud {}
 
