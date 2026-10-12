@@ -140,7 +140,7 @@ Two details worth not re-deriving:
 - **Routing is path-based** (`/api/core`), and was hash-based until the move off
   GitHub Pages, which serves static files with no SPA fallback and answered every
   deep link with a 404. Cloudflare takes a `_redirects` file, so `/* /index.html
-200` is the whole cost of the change on the hosting side; `scripts/preview.ts`
+  200` is the whole cost of the change on the hosting side; `scripts/preview.ts`
   serves the same fallback, which is what keeps the browser suite honest about
   what the edge does. Navigation is one delegated click listener rather than a
   `<Link>` component, since every link on the site is already a Mantine `Anchor`

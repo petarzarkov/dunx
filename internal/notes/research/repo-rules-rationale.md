@@ -609,7 +609,7 @@ then not cover it.
   changes, both measured in
   [docs/bun-apis.md](../../../docs/bun-apis.md): a `?raw` import resolves as JSON inside a
   worker, which is why `internal/docs` is the one workspace excluded. `--coverage
---parallel` reported low and differently every run on 1.4.0 and agrees with
+  --parallel` reported low and differently every run on 1.4.0 and agrees with
   sequential on 1.4.1, so the `coverage` phase runs `--parallel` too; the
   measurement is in that file.
 - **A second checkout of this repo poisons `internal/docs`'s suite, and the error

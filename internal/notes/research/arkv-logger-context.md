@@ -63,7 +63,9 @@ export interface ContextScope extends ContextReader {
 
 /** Everything `Logger`'s second parameter accepts. */
 export type ContextSource =
-  ContextReader | (() => AsyncContext | undefined) | AsyncContext;
+  | ContextReader
+  | (() => AsyncContext | undefined)
+  | AsyncContext;
 
 const EMPTY: AsyncContext = Object.freeze({});
 
@@ -303,7 +305,7 @@ leaving `context.test.ts` at 90 and both far under 500):
    `fields.requestId = 'r-1'`, then log, assert the entry carries it. Locks live
    reading rather than a construction-time snapshot.
 3. `reads a zero-argument function`, and `logs no context fields when the function
-returns undefined`.
+   returns undefined`.
 4. `prefers peekContext over getContext` - a reader counting both, asserting exactly
    one `peekContext` and zero `getContext` per entry. Then
    `falls back to getContext when peekContext is absent` on the same counter,
