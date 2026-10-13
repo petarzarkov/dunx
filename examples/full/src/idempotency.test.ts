@@ -1,6 +1,10 @@
 import { afterAll, beforeAll, expect, it } from 'bun:test';
 import { EventBusModule } from '@dunx/core';
-import { IDEMPOTENT_REPLAYED_HEADER } from '@dunx/http';
+import {
+  IDEMPOTENT_REPLAYED_HEADER,
+  IdempotencyModule,
+  MemoryIdempotencyStore,
+} from '@dunx/http';
 import { createTestServer, type TestServer } from '@dunx/testing';
 import { configModule } from './config.js';
 import { Audit } from './events/audit.service.js';
@@ -64,4 +68,48 @@ it('places an order without a key exactly as before', async () => {
   expect((await place(1)).status).toBe(201);
   expect((await place(1)).status).toBe(201);
   expect(placed()).toBe(before + 2);
+});
+
+it('keeps recent order replays when the memory store reaches capacity', async () => {
+  const bounded = await createTestServer({
+    modules: [
+      EventsModule,
+      EventBusModule,
+      IdempotencyModule.forRoot({
+        prefix: 'bounded-orders',
+        subject: () => undefined,
+        store: new MemoryIdempotencyStore(2),
+      }),
+    ],
+  });
+  const send = (key: string) =>
+    bounded.request('events/orders', {
+      method: 'POST',
+      headers: { 'idempotency-key': key },
+      json: { total: 10 },
+    });
+
+  try {
+    const audit = bounded.app.get(Audit);
+    const before = audit.rows.length;
+    const first = await send('a');
+    expect(first.status).toBe(201);
+    const answer = await first.json();
+    expect((await send('b')).status).toBe(201);
+
+    const replay = await send('a');
+    expect(replay.headers.get(IDEMPOTENT_REPLAYED_HEADER)).toBe('true');
+    expect(await replay.json()).toEqual(answer);
+    expect((await send('c')).status).toBe(201);
+
+    const retained = await send('b');
+    expect(retained.headers.get(IDEMPOTENT_REPLAYED_HEADER)).toBe('true');
+    expect(await retained.json()).toEqual(answer);
+    const evicted = await send('a');
+    expect(evicted.status).toBe(201);
+    expect(evicted.headers.get(IDEMPOTENT_REPLAYED_HEADER)).toBeNull();
+    expect(audit.rows).toHaveLength(before + 4);
+  } finally {
+    await bounded.close();
+  }
 });
