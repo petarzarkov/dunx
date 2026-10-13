@@ -77,7 +77,7 @@ CacheModule.forRootAsync({
     store: new TieredCacheStore(
       new MemoryCacheStore({ max: 5_000 }),
       new RedisCacheStore(redis),
-      { promoteTtl: 5_000 },
+      { ttl: 5_000 },
     ),
   }),
   inject: [RedisConnection],
@@ -94,15 +94,23 @@ a `Map` comes back as `{}`. `MemoryCacheStore` stores the value by reference, so
 reader that mutates what it got back changes what the next reader gets.
 
 `TieredCacheStore` answers from L1 when it can, copies an L2 hit into L1 for
-`promoteTtl`, and writes and deletes through to both.
+`local.ttl` (falling back to the constructor's `ttl`, which defaults to 30,000 ms),
+and writes and deletes through to both. Set `local.ttl` and `remote.ttl` to give
+writes different lifetimes; either one falls back to the shared lifetime passed
+to `set` or `wrap`. A tier with `enabled: false` is skipped for reads, writes
+and deletes.
 
 ## What two nodes see
 
 L1 is local and L2 is shared. `del` on one node clears that node's L1 and the shared L2;
-every other node keeps serving its own L1 copy until the entry expires. With
-`TieredCacheStore` that window is `promoteTtl`. Set it to the staleness a route
-can tolerate, or give a route that can tolerate none a `RedisCacheStore` with no
-L1 in front of it.
+every other node keeps serving its own L1 copy until its entry expires.
+
+Set `local.ttl` to bound that lifetime for both writes and L2 hits promoted into
+L1. Without it, writes use the lifetime passed to `set` or `wrap`, while promoted
+entries use the constructor's `ttl`.
+
+Give a route that can tolerate no local staleness a `RedisCacheStore` with no L1
+in front of it.
 
 ## Async options
 

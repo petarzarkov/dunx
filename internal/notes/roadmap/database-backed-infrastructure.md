@@ -81,7 +81,7 @@ What shipped, and what was cut:
   slower than the Redis one it would sit beside.
 - **No cross-process L1 invalidation.** `TieredCacheStore.del` clears this node's
   L1 and the shared L2; every other node serves its own L1 copy until
-  `promoteTtl` expires. Pub/sub is the fix and is deferred: a subscribing
+  its local lifetime expires. Pub/sub is the fix and is deferred: a subscribing
   `Bun.RedisClient` holds the event loop open after `close()`, so every app with a
   cache would stop exiting. Tracked with the other loop-hold findings in
   `docs/ROADMAP.md`.

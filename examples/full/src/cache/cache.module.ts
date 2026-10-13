@@ -68,7 +68,7 @@ const sessionsUrl = (url: string | undefined): string => {
           store: new TieredCacheStore(
             new MemoryCacheStore({ max: 500 }),
             l2.store,
-            { promoteTtl: 5_000 },
+            { ttl: 5_000 },
           ),
         }),
         inject: [CacheL2] as const,
