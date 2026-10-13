@@ -133,6 +133,18 @@ if (HAS_REDIS) {
 }
 
 describe('MemoryIdempotencyStore bounds', () => {
+  // Memory operations settle their state synchronously. Restore the clock before
+  // awaiting their result so another test never observes a mocked Date.now.
+  const at = <T>(now: number, operation: () => T): T => {
+    const realNow = Date.now;
+    Date.now = () => now;
+    try {
+      return operation();
+    } finally {
+      Date.now = realNow;
+    }
+  };
+
   it('evicts the oldest live entry at maxKeys', async () => {
     const store = new MemoryIdempotencyStore(2);
     await store.claim('a', claimOf(), 5000);
@@ -151,6 +163,104 @@ describe('MemoryIdempotencyStore bounds', () => {
     await store.claim('c', claimOf(), 5000);
     expect(await store.read('a')).toBeDefined();
     expect(await store.read('c')).toBeDefined();
+  });
+
+  it('reclaims leases at their exact deadlines before evicting live entries', async () => {
+    const store = new MemoryIdempotencyStore(3);
+    await at(1000, () => store.claim('a', claimOf(), 1000));
+    await at(1000, () => store.claim('b', claimOf(), 100));
+    await at(1000, () => store.claim('c', claimOf(), 150));
+
+    await at(1100, () => store.claim('d', claimOf(), 1000));
+    expect(await at(1100, () => store.read('a'))).toBeDefined();
+    expect(await at(1100, () => store.read('b'))).toBeUndefined();
+    expect(await at(1100, () => store.read('c'))).toBeDefined();
+
+    await at(1150, () => store.claim('e', claimOf(), 1000));
+    expect(await at(1150, () => store.read('a'))).toBeDefined();
+    expect(await at(1150, () => store.read('c'))).toBeUndefined();
+    expect(await at(1150, () => store.read('d'))).toBeDefined();
+    expect(await at(1150, () => store.read('e'))).toBeDefined();
+  });
+
+  it('reclaims a completed response whose TTL is shorter than its lease', async () => {
+    const store = new MemoryIdempotencyStore(2);
+    const claim = claimOf();
+    await at(1000, () => store.claim('a', claimOf(), 5000));
+    await at(1000, () => store.claim('b', claim, 5000));
+    await at(1010, () => store.complete('b', claim, response, 40));
+
+    await at(1050, () => store.claim('c', claimOf(), 5000));
+    expect(await at(1050, () => store.read('a'))).toBeDefined();
+    expect(await at(1050, () => store.read('b'))).toBeUndefined();
+    expect(await at(1050, () => store.read('c'))).toBeDefined();
+  });
+
+  it('retains a completed response beyond its original lease deadline', async () => {
+    const store = new MemoryIdempotencyStore(3);
+    const claim = claimOf();
+    await at(1000, () => store.claim('a', claimOf(), 5000));
+    await at(1000, () => store.claim('b', claim, 50));
+    await at(1000, () => store.claim('c', claimOf(), 5000));
+    await at(1010, () => store.complete('b', claim, response, 2000));
+
+    await at(1050, () => store.claim('d', claimOf(), 5000));
+    expect(await at(1050, () => store.read('a'))).toBeUndefined();
+    expect(await at(1050, () => store.read('b'))).toEqual({
+      state: 'done',
+      fingerprint: claim.fingerprint,
+      response,
+    });
+    expect(await at(1050, () => store.read('c'))).toBeDefined();
+    expect(await at(1050, () => store.read('d'))).toBeDefined();
+  });
+
+  it.each(['read', 'release', 'eviction'] as const)(
+    'still reclaims expired leases after the earliest entry is removed by %s',
+    async (removal) => {
+      const store = new MemoryIdempotencyStore(3);
+      const claim = claimOf();
+      await at(1000, () => store.claim('a', claim, 50));
+      await at(1000, () => store.claim('b', claimOf(), 100));
+      await at(1000, () => store.claim('c', claimOf(), 1000));
+
+      if (removal === 'read') {
+        expect(await at(1050, () => store.read('a'))).toBeUndefined();
+        await at(1050, () => store.claim('d', claimOf(), 1000));
+      } else {
+        if (removal === 'release') {
+          await at(1040, () => store.release('a', claim));
+        }
+        await at(1040, () => store.claim('d', claimOf(), 1000));
+      }
+
+      await at(1100, () => store.claim('e', claimOf(), 1000));
+      expect(await at(1100, () => store.read('a'))).toBeUndefined();
+      expect(await at(1100, () => store.read('b'))).toBeUndefined();
+      expect(await at(1100, () => store.read('c'))).toBeDefined();
+      expect(await at(1100, () => store.read('d'))).toBeDefined();
+      expect(await at(1100, () => store.read('e'))).toBeDefined();
+    },
+  );
+
+  it('keeps insertion-order eviction through repeated claims, reads and completion', async () => {
+    const store = new MemoryIdempotencyStore(3);
+    const claim = claimOf();
+    await at(1000, () => store.claim('a', claim, 5000));
+    await at(1000, () => store.claim('b', claimOf(), 5000));
+    await at(1000, () => store.claim('c', claimOf(), 5000));
+    await at(1010, () => store.complete('a', claim, response, 5000));
+    expect(await at(1010, () => store.read('b'))).toBeDefined();
+
+    const keys = ['a', 'b', 'c', 'd', 'e', 'f'];
+    for (let index = 3; index < keys.length; index++) {
+      await at(1020, () => store.claim(keys[index]!, claimOf(), 5000));
+      for (let previous = 0; previous <= index; previous++) {
+        const record = await at(1020, () => store.read(keys[previous]!));
+        if (previous <= index - 3) expect(record).toBeUndefined();
+        else expect(record).toBeDefined();
+      }
+    }
   });
 
   it('is a contract that cannot be constructed itself', () => {
