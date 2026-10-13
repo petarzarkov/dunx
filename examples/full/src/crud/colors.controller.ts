@@ -22,7 +22,7 @@ export class ColorsStore extends CrudStore<Color> {
   tags: ['Crud'],
   description: 'A generic CrudController base, served here without remove.',
 })
-@Controller('colors', { exclude: ['remove'] })
+@Controller('colors', { excludes: ['remove'] })
 export class ColorsController extends CrudController<Color> {
   constructor(store: ColorsStore) {
     super(store);

@@ -10,7 +10,7 @@ import type { Input, Returns, RouteSchemas } from './schema.js';
 /**
  * `options.version` versions every handler; see `VersioningOptions`.
  *
- * `N` is every name `include` and `exclude` list, and the target has to have a
+ * `N` is every name `includes` and `excludes` list, and the target has to have a
  * member of each, so a misspelt handler is a compile error. Discovery checks the
  * rest: that each one is a route and not some other method.
  */

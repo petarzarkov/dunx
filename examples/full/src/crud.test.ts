@@ -36,7 +36,7 @@ it('serves the handlers it inherits from CrudController', async () => {
   expect(one.body).toEqual({ id: 'moss', hex: '#5c940d' });
 });
 
-it('does not serve the handler exclude names', async () => {
+it('does not serve the excluded handlers', async () => {
   const res = await fetch(new URL('colors/moss', server.url), {
     method: 'DELETE',
   });
