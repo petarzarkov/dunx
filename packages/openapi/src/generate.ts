@@ -23,6 +23,8 @@ import {
   type OperationObject,
   type PathItemObject,
   type ServerObject,
+  type SpecVersion,
+  type TagGroup,
   type TagObject,
 } from './types.js';
 
@@ -31,6 +33,24 @@ export interface DocumentInfo {
   readonly version: string;
   readonly description?: string;
   readonly servers?: readonly ServerObject[];
+  /**
+   * Hierarchical grouping for the document's `tags`, declared beside the
+   * document rather than on each operation.
+   *
+   * `Operation.tags` stays a flat list of names: an operation belongs to the
+   * tags it names, and putting the nesting there too would make the same array
+   * mean two things. The relationship is a property of the document, which is
+   * where a viewer looks for it.
+   */
+  readonly tagGroups?: readonly TagGroup[];
+  /**
+   * Which OpenAPI specification to emit. Default `3.1.0`.
+   *
+   * `tagGroups` renders either way: 3.2 gained a native `parent` on the Tag
+   * Object, so a 3.2 document carries the nesting itself and 3.1 carries it as
+   * `x-tagGroups`, the extension Scalar and Redoc already read.
+   */
+  readonly specVersion?: SpecVersion;
   /**
    * Paths this generator cannot see, merged into the document.
    *
@@ -151,15 +171,41 @@ const ordered = (routes: readonly DiscoveredRoute[]): DiscoveredRoute[] =>
  * tags it never declared, which puts every viewer's sidebar at odds with its own
  * operation list. Reading them back off the built operations is what makes the two
  * agree by construction.
+ *
+ * A group's members are the one exception, added whether or not a route uses one
+ * today: the hierarchy is a declaration about the document, not a reading of what
+ * the routes happen to carry. Its own name is a tag only under 3.2, where the
+ * nesting is that tag's children; under 3.1 the name stays a label in
+ * `x-tagGroups`.
+ *
+ * Sorted by code unit, like the tags themselves: a generated document has to come
+ * out byte-identical on every machine, and collation is locale-dependent.
  */
 const tagsOf = (
   operations: readonly OperationObject[],
+  groups: readonly TagGroup[],
+  specVersion: SpecVersion,
 ): readonly TagObject[] => {
   const names = new Set<string>();
   for (const operation of operations) {
     for (const tag of operation.tags ?? []) names.add(tag);
   }
-  return [...names].sort().map((name) => ({ name }));
+
+  const parentOf = new Map<string, string>();
+  const nesting = specVersion === '3.2.0';
+  for (const group of groups) {
+    if (nesting) names.add(group.name);
+    for (const tag of group.tags) {
+      names.add(tag);
+      // Under 3.1 the nesting lives in `x-tagGroups`, so a tag carries no parent.
+      if (nesting) parentOf.set(tag, group.name);
+    }
+  }
+
+  return [...names].sort().map((name) => {
+    const parent = parentOf.get(name);
+    return parent === undefined ? { name } : { name, parent };
+  });
 };
 
 /**
@@ -196,8 +242,11 @@ export const generateDocument = async (
       : {}),
   };
 
+  const specVersion = info.specVersion ?? '3.1.0';
+  const tagGroups = info.tagGroups ?? [];
+
   const document: OpenApiDocument = {
-    openapi: '3.1.0',
+    openapi: specVersion,
     info: {
       title: info.title,
       version: info.version,
@@ -208,7 +257,11 @@ export const generateDocument = async (
     ...(info.servers !== undefined && info.servers.length > 0
       ? { servers: info.servers }
       : {}),
-    tags: tagsOf(operations),
+    tags: tagsOf(operations, tagGroups, specVersion),
+    // 3.2 states the nesting on each tag, so the extension would say it twice.
+    ...(specVersion === '3.1.0' && tagGroups.length > 0
+      ? { 'x-tagGroups': tagGroups }
+      : {}),
     paths,
     components,
   };

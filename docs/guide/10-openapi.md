@@ -43,6 +43,8 @@ with a `getOpenapiJson()` on it.
 | `version`     | required        | `info.version`                             |
 | `description` | none            | `info.description`                         |
 | `servers`     | none            | `servers[]`                                |
+| `tagGroups`   | none            | Tag nesting, declared per group            |
+| `specVersion` | `3.1.0`         | The specification the document declares    |
 | `root`        | required        | The module graph to document and to import |
 | `renderer`    | none            | The documentation UI. None serves no page  |
 | `path`        | `/docs`         | Where the HTML page is mounted             |
@@ -260,6 +262,49 @@ One difference: `RouteContext.get` returns the method's value if there is one, s
 a method value **replaces** the class value. That suits `@Roles`. `@ApiDoc` merges
 field by field instead, so a `DiscoveredRoute` also carries the class's own value
 in `classMeta`, next to the merged `meta`.
+
+## Tag hierarchy
+
+A viewer lists tags in the order the document names them. To nest them, declare
+the grouping once beside the document:
+
+```ts
+OpenApiModule.forRoot({
+  title: 'API',
+  version: '1.0.0',
+  root: AppModule,
+  tagGroups: [
+    { name: 'System', tags: ['Roles', 'Posts', 'Dictionaries', 'AuditLog'] },
+  ],
+});
+```
+
+`Operation.tags` stays the flat list of names a route named. The nesting belongs
+to the document, so an operation's own tags never restate it. A group's members
+are declared even where no operation carries one yet, which makes the group the
+only way to document a tag ahead of the first route that uses it.
+
+The shape the hierarchy takes depends on the specification version.
+`specVersion` defaults to `3.1.0`, where it is the `x-tagGroups` extension:
+
+```yaml
+x-tagGroups:
+  - name: System
+    tags: [Roles, Posts, Dictionaries, AuditLog]
+```
+
+Set `specVersion: '3.2.0'` and the document declares 3.2, drops the extension and
+states the same nesting on the Tag Objects themselves:
+
+```yaml
+tags:
+  - name: System
+  - name: Roles
+    parent: System
+```
+
+Scalar and Redoc read `x-tagGroups`; Swagger UI ignores it. `parent` is 3.2 only,
+so a 3.1 document carries no `parent`.
 
 ## Security comes from the guards' own metadata
 
