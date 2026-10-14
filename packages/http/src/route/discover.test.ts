@@ -204,7 +204,7 @@ describe('@Controller includes and excludes', () => {
     class Misspelt extends Crud {}
 
     expect(() => discoverRoutes(new Misspelt())).toThrow(
-      'Misspelt passes exlude to @Controller, which takes includes, excludes, include, exclude and version',
+      'Misspelt passes exlude to @Controller, which takes includes, excludes and version',
     );
   });
 
@@ -229,22 +229,13 @@ describe('@Controller includes and excludes', () => {
     );
   });
 
-  it('keeps the singular names as deprecated aliases', () => {
+  it('refuses the removed singular names, at compile time and at runtime', () => {
+    // @ts-expect-error `include` and `exclude` were removed in favour of the plurals
     @Controller('legacy', { include: ['getList'], exclude: ['remove'] })
     class Legacy extends Crud {}
 
-    expect(routesOf(new Legacy())).toEqual(['GET /legacy']);
-  });
-
-  it('prefers plural names when both forms are supplied', () => {
-    @Controller('canonical', {
-      includes: ['getList'],
-      excludes: [],
-      include: ['getOne'],
-      exclude: ['getList'],
-    })
-    class Canonical extends Crud {}
-
-    expect(routesOf(new Canonical())).toEqual(['GET /canonical']);
+    expect(() => discoverRoutes(new Legacy())).toThrow(
+      'Legacy passes include to @Controller, which takes includes, excludes and version',
+    );
   });
 });

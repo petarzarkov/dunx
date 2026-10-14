@@ -70,15 +70,10 @@ const applyFilter = (
   // leave the route it meant to hide being served.
   for (const [list, listed] of Object.entries(filter)) {
     if (list === 'version') continue;
-    if (
-      list !== 'includes' &&
-      list !== 'excludes' &&
-      list !== 'include' &&
-      list !== 'exclude'
-    ) {
+    if (list !== 'includes' && list !== 'excludes') {
       throw new AppError(
         `${klass.name} passes ${list} to @Controller, which takes includes, ` +
-          'excludes, include, exclude and version.',
+          'excludes and version.',
       );
     }
     for (const name of (listed ?? []) as readonly string[]) {
@@ -91,10 +86,7 @@ const applyFilter = (
     }
   }
 
-  // Prefer the plural names when both forms are supplied. An explicitly empty
-  // plural list therefore wins over a deprecated singular alias.
-  const includes = filter.includes ?? filter.include;
-  const excludes = filter.excludes ?? filter.exclude;
+  const { includes, excludes } = filter;
   return marked.filter(
     ({ name }) =>
       (includes === undefined || includes.includes(name)) &&
