@@ -15,7 +15,7 @@
     "start": "bun src/main.ts",
     "test": "bun test",
     "tour": "bun src/tour.ts",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "bun check"
   },
   "dependencies": {
     "@bufbuild/protobuf": "2.15.0",

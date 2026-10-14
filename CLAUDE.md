@@ -149,7 +149,7 @@ them from memory:
 | -------------------------------- | ---------------------------------------------------------------------------------------- |
 | `oxlint`                         | no `enum`, no `Dunx` prefix, no `any`, 500-line files (800 for tests)                    |
 | `oxfmt`                          | formatting                                                                               |
-| `tsc`                            | strict, `noUncheckedIndexedAccess`, `exactOptionalPropertyTypes`, `verbatimModuleSyntax` |
+| `bun check`                      | strict, `noUncheckedIndexedAccess`, `exactOptionalPropertyTypes`, `verbatimModuleSyntax` |
 | `scripts/rule-native.test.ts`    | Rule 1                                                                                   |
 | `scripts/rule-example.test.ts`   | Rule 4                                                                                   |
 | `scripts/exact-versions.test.ts` | bare `1.2.3` in deps, ranges in peers                                                    |

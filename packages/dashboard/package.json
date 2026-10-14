@@ -51,7 +51,7 @@
     "build": "bun ../../internal/dashboard-ui/scripts/build.ts && bun ../../scripts/build-package.ts",
     "test": "bun test --bail",
     "test:cov": "bun test --coverage",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "bun check"
   },
   "devDependencies": {
     "@bull-board/api": "8.6.0",

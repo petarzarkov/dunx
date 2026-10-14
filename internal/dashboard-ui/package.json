@@ -8,7 +8,7 @@
     "bundle": "bun ./scripts/build.ts",
     "dev": "vite",
     "test": "bun test --bail",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "bun check"
   },
   "dependencies": {
     "@dunx/ui": "workspace:*",

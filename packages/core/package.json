@@ -47,7 +47,7 @@
     "build": "bun ../../scripts/build-package.ts",
     "test": "bun test --bail",
     "test:cov": "bun test --coverage",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "bun check"
   },
   "dependencies": {},
   "devDependencies": {
