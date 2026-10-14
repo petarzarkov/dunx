@@ -2,7 +2,11 @@ import { describe, expect, test } from 'bun:test';
 import { inject, Module, provide } from '@dunx/core';
 import type { BunRequest, Server } from 'bun';
 import { Controller, Get } from '../route/decorators.js';
-import { attachAddressSource, ClientAddress } from './client-address.js';
+import {
+  attachAddressSource,
+  ClientAddress,
+  forwardedEntry,
+} from './client-address.js';
 import type { RouteContext } from './context.js';
 import { HttpFactory } from './factory.js';
 import type { Middleware, Next } from './middleware.js';
@@ -170,6 +174,33 @@ describe('ClientAddress hop counting', () => {
  * site and not another, and the second silently matched nothing. It is the same
  * address in a different notation, so `of()` returns one notation.
  */
+describe('forwardedEntry', () => {
+  test('counts non-blank entries from the right', () => {
+    expect(forwardedEntry('a, b, c', 1)).toBe('c');
+    expect(forwardedEntry('a, b, c', 2)).toBe('b');
+    expect(forwardedEntry('a, b, c', 3)).toBe('a');
+  });
+
+  test('drops blank entries rather than counting them', () => {
+    expect(forwardedEntry(', b', 1)).toBe('b');
+    expect(forwardedEntry('a,', 1)).toBe('a');
+    expect(forwardedEntry('a, , b', 1)).toBe('b');
+    expect(forwardedEntry('a, , b', 2)).toBe('a');
+  });
+
+  test('clamps to the leftmost entry when hops exceed the count', () => {
+    expect(forwardedEntry('a, b', 3)).toBe('a');
+    expect(forwardedEntry('a, b', 9)).toBe('a');
+  });
+
+  test('returns undefined for nothing trusted or an empty header', () => {
+    expect(forwardedEntry(null, 1)).toBeUndefined();
+    expect(forwardedEntry('', 1)).toBeUndefined();
+    expect(forwardedEntry(' , ,', 1)).toBeUndefined();
+    expect(forwardedEntry('a', 0)).toBeUndefined();
+  });
+});
+
 describe('ClientAddress IPv4-mapped addresses', () => {
   test('the socket form comes back as plain IPv4', () => {
     expect(attached(false, '::ffff:10.0.0.1').of(withForwarded())).toBe(

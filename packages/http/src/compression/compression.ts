@@ -6,6 +6,7 @@ import {
   CompressionOptions,
   compressionStream,
   encodeSync,
+  type CompressionEncoding,
 } from './options.js';
 import { varyOn } from '../server/vary.js';
 
@@ -124,9 +125,26 @@ const varyOnEncoding = (headers: Headers): void =>
  */
 export class Compression implements Middleware {
   readonly #options: CompressionOptions;
+  /**
+   * The negotiated coding per `accept-encoding` string. Real clients resend one
+   * of a handful of fixed strings, so parsing them on every response is repeated
+   * work; bounded so a caller sending many distinct headers cannot grow it.
+   */
+  readonly #negotiated = new Map<string, CompressionEncoding | null>();
 
   constructor(options: CompressionOptions) {
     this.#options = options;
+  }
+
+  #negotiate(header: string | null): CompressionEncoding | undefined {
+    if (header === null) return undefined;
+    if (this.#negotiated.has(header)) {
+      return this.#negotiated.get(header) ?? undefined;
+    }
+    const coding = negotiate(header, this.#options.encodings) ?? null;
+    if (this.#negotiated.size >= 128) this.#negotiated.clear();
+    this.#negotiated.set(header, coding);
+    return coding ?? undefined;
   }
 
   /** Whether the response is a candidate at all, before the client is consulted. */
@@ -159,10 +177,7 @@ export class Compression implements Middleware {
     if (res.status === 304) {
       if (!this.#encodable(res)) return res;
       varyOnEncoding(res.headers);
-      const encoding = negotiate(
-        req.headers.get('accept-encoding'),
-        this.#options.encodings,
-      );
+      const encoding = this.#negotiate(req.headers.get('accept-encoding'));
       if (encoding !== undefined) weakenETag(res.headers);
       return res;
     }
@@ -174,10 +189,7 @@ export class Compression implements Middleware {
     // response.
     varyOnEncoding(res.headers);
 
-    const encoding = negotiate(
-      req.headers.get('accept-encoding'),
-      this.#options.encodings,
-    );
+    const encoding = this.#negotiate(req.headers.get('accept-encoding'));
     if (encoding === undefined) return res;
 
     const declared = declaredLength(res.headers);
@@ -186,16 +198,15 @@ export class Compression implements Middleware {
     if (declared !== undefined && declared < this.#options.threshold)
       return res;
 
-    const headers = new Headers(res.headers);
-    headers.set('content-encoding', encoding);
-    weakenETag(headers);
-
     const source =
       declared !== undefined && declared > BUFFER_LIMIT
         ? { rest: body }
         : await buffer(body, BUFFER_LIMIT);
 
     if ('rest' in source) {
+      const headers = new Headers(res.headers);
+      headers.set('content-encoding', encoding);
+      weakenETag(headers);
       // The encoded length is not known until the stream ends.
       headers.delete('content-length');
       return new Response(
@@ -206,6 +217,8 @@ export class Compression implements Middleware {
 
     // Now the size is known, so the threshold can finally be applied. The body was
     // consumed to learn it, so the untouched case is rebuilt rather than returned.
+    // The header copy is deferred to here so a small body never pays for the
+    // `content-encoding`/weakened headers it then discards.
     if (source.bytes.byteLength < this.#options.threshold) {
       const passthrough = new Headers(res.headers);
       passthrough.set('content-length', String(source.bytes.byteLength));
@@ -216,6 +229,9 @@ export class Compression implements Middleware {
       });
     }
 
+    const headers = new Headers(res.headers);
+    headers.set('content-encoding', encoding);
+    weakenETag(headers);
     const encoded = encodeSync(encoding, source.bytes);
     headers.set('content-length', String(encoded.byteLength));
     return new Response(encoded, {
