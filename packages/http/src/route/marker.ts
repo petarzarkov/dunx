@@ -69,15 +69,11 @@ export const routeMetaOf = (value: unknown): RouteMeta | undefined =>
 /**
  * Which handlers a controller keeps, by method name: `includes` first, then
  * `excludes`. It is how a subclass of a generic base serves part of what it
- * inherits. The singular names remain as deprecated aliases.
+ * inherits.
  */
 export interface RouteFilter<N extends string = string> {
   readonly includes?: readonly N[];
   readonly excludes?: readonly N[];
-  /** @deprecated Use `includes` instead. */
-  readonly include?: readonly N[];
-  /** @deprecated Use `excludes` instead. */
-  readonly exclude?: readonly N[];
 }
 
 /** `@Controller`'s second argument: the route filter, and the version. */
