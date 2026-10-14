@@ -77,7 +77,7 @@ Run these before you push. CI runs the same set, in this order.
 | `bun run build`        | Topological build of every workspace, JS plus `.d.ts`                       |
 | `bun run lint:check`   | oxlint, no fixing                                                           |
 | `bun run format:check` | oxfmt, no writing                                                           |
-| `bun run typecheck`    | `bun check` in every workspace                                              |
+| `bun run typecheck`    | `bun check` in every workspace but `examples/minimal`, which keeps `tsc`    |
 | `bun run test:cov`     | One root run over `./packages ./scripts`, then rebuilds the coverage report |
 | `bun run test`         | Every workspace's own suite, bailing on first failure                       |
 
