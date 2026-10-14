@@ -56,16 +56,20 @@ export const markedMethods = <M>(
     proto !== null && proto !== Object.prototype;
     proto = Object.getPrototypeOf(proto) as object | null
   ) {
-    for (const [name, descriptor] of Object.entries(
-      Object.getOwnPropertyDescriptors(proto),
-    )) {
+    // Names plus a descriptor read per name, rather than
+    // `getOwnPropertyDescriptors` into `Object.entries`: that built a descriptor
+    // object and an entries array for every prototype level just to read `value`.
+    // The descriptor is still what `value` comes from, so an accessor is skipped
+    // rather than invoked.
+    for (const name of Object.getOwnPropertyNames(proto)) {
       if (name === 'constructor' || seen.has(name)) continue;
 
-      const meta = metaOf(descriptor.value);
+      const value = Object.getOwnPropertyDescriptor(proto, name)?.value;
+      const meta = metaOf(value);
       if (meta === undefined) continue;
 
       seen.add(name);
-      found.push({ name, meta, value: descriptor.value as object });
+      found.push({ name, meta, value: value as object });
     }
   }
 
@@ -124,23 +128,29 @@ export interface DiscoveredMethod<M, H extends HandlerMethod = HandlerMethod> {
  * since the member is read off the instance rather than off the prototype the
  * marker was found on.
  */
-export const markedMethodsOn = <M, H extends HandlerMethod = HandlerMethod>(
+const bindMarked = <M, H extends HandlerMethod>(
   instance: object,
-  metaOf: (value: unknown) => M | undefined,
+  marked: readonly MarkedMethod<M>[],
 ): readonly DiscoveredMethod<M, H>[] => {
   const provider = instance.constructor.name;
   const members = instance as Record<string, HandlerMethod>;
 
-  return markedMethods(
-    Object.getPrototypeOf(instance) as object | null,
-    metaOf,
-  ).map(({ name, meta }) => ({
+  return marked.map(({ name, meta }) => ({
     provider,
     method: name,
     meta,
     handler: members[name]!.bind(instance) as H,
   }));
 };
+
+export const markedMethodsOn = <M, H extends HandlerMethod = HandlerMethod>(
+  instance: object,
+  metaOf: (value: unknown) => M | undefined,
+): readonly DiscoveredMethod<M, H>[] =>
+  bindMarked<M, H>(
+    instance,
+    markedMethods(Object.getPrototypeOf(instance) as object | null, metaOf),
+  );
 
 /**
  * Every marked method the module graph declares, each resolved from the scope
@@ -168,12 +178,13 @@ export const discoverMarked = <M, H extends HandlerMethod = HandlerMethod>(
     from: ModuleRef,
   ): void => {
     if (scanned.has(ctor)) return;
-    if (markedMethods(ctor.prototype as object | null, metaOf).length === 0) {
-      return;
-    }
+    // Walked once and reused: the guard and the binding read the same prototype,
+    // and doing it twice was the walk twice per class per discoverer.
+    const marked = markedMethods<M>(ctor.prototype as object | null, metaOf);
+    if (marked.length === 0) return;
     scanned.add(ctor);
     found.push(
-      ...markedMethodsOn<M, H>(container.get(token, from) as object, metaOf),
+      ...bindMarked<M, H>(container.get(token, from) as object, marked),
     );
   };
 
