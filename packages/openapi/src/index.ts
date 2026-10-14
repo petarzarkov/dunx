@@ -104,5 +104,7 @@ export {
   type SecurityRequirement,
   type SecuritySchemeObject,
   type ServerObject,
+  type SpecVersion,
+  type TagGroup,
   type TagObject,
 } from './types.js';

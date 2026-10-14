@@ -93,13 +93,33 @@ export interface InfoObject {
 export interface TagObject {
   readonly name: string;
   readonly description?: string;
+  /** OpenAPI 3.2 only: the tag this one nests under. Absent at the top level. */
+  readonly parent?: string;
 }
 
+/**
+ * A tag and the tags drawn inside it.
+ *
+ * One shape with two readings: 3.1 takes the array as the document's
+ * `x-tagGroups`, while 3.2 flattens each entry into a `parent` on its members.
+ */
+export interface TagGroup {
+  readonly name: string;
+  /** 3.2 only, on the group's own tag. `x-tagGroups` has no field for it. */
+  readonly description?: string;
+  readonly tags: readonly string[];
+}
+
+/** The specifications this generator emits. `parent` exists only from 3.2. */
+export type SpecVersion = '3.1.0' | '3.2.0';
+
 export interface OpenApiDocument {
-  readonly openapi: '3.1.0';
+  readonly openapi: SpecVersion;
   readonly info: InfoObject;
   readonly servers?: readonly ServerObject[];
   readonly tags?: readonly TagObject[];
+  /** 3.1 only: 3.2 carries the hierarchy on each tag's `parent` instead. */
+  readonly 'x-tagGroups'?: readonly Omit<TagGroup, 'description'>[];
   readonly paths: Readonly<Record<string, PathItemObject>>;
   readonly components: ComponentsObject;
 }

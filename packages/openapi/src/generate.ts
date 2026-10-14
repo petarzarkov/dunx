@@ -23,6 +23,8 @@ import {
   type OperationObject,
   type PathItemObject,
   type ServerObject,
+  type SpecVersion,
+  type TagGroup,
   type TagObject,
 } from './types.js';
 
@@ -31,6 +33,24 @@ export interface DocumentInfo {
   readonly version: string;
   readonly description?: string;
   readonly servers?: readonly ServerObject[];
+  /**
+   * Hierarchical grouping for the document's `tags`, declared beside the
+   * document rather than on each operation.
+   *
+   * `Operation.tags` stays a flat list of names: an operation belongs to the
+   * tags it names, and putting the nesting there too would make the same array
+   * mean two things. The relationship is a property of the document, which is
+   * where a viewer looks for it.
+   */
+  readonly tagGroups?: readonly TagGroup[];
+  /**
+   * Which OpenAPI specification to emit. Default `3.1.0`.
+   *
+   * `tagGroups` renders either way: 3.2 gained a native `parent` on the Tag
+   * Object, so a 3.2 document carries the nesting itself and 3.1 carries it as
+   * `x-tagGroups`, the extension Scalar and Redoc already read.
+   */
+  readonly specVersion?: SpecVersion;
   /**
    * Paths this generator cannot see, merged into the document.
    *
@@ -151,15 +171,106 @@ const ordered = (routes: readonly DiscoveredRoute[]): DiscoveredRoute[] =>
  * tags it never declared, which puts every viewer's sidebar at odds with its own
  * operation list. Reading them back off the built operations is what makes the two
  * agree by construction.
+ *
+ * A group's members are the one exception, added whether or not a route uses one
+ * today: the hierarchy is a declaration about the document, not a reading of what
+ * the routes happen to carry. Its own name is a tag only under 3.2, where the
+ * nesting is that tag's children; under 3.1 the name stays a label in
+ * `x-tagGroups`.
+ *
+ * Sorted by code unit, like the tags themselves: a generated document has to come
+ * out byte-identical on every machine, and collation is locale-dependent.
  */
 const tagsOf = (
   operations: readonly OperationObject[],
+  groups: readonly TagGroup[],
+  specVersion: SpecVersion,
 ): readonly TagObject[] => {
   const names = new Set<string>();
   for (const operation of operations) {
     for (const tag of operation.tags ?? []) names.add(tag);
   }
-  return [...names].sort().map((name) => ({ name }));
+
+  const nesting = specVersion === '3.2.0';
+  const parentOf = parentsOf(groups, nesting);
+  const describedAs = new Map<string, string>();
+  for (const group of groups) {
+    for (const tag of group.tags) names.add(tag);
+    if (!nesting) continue;
+    names.add(group.name);
+    if (group.description !== undefined)
+      describedAs.set(group.name, group.description);
+  }
+
+  return [...names].sort().map((name) => {
+    const description = describedAs.get(name);
+    // Under 3.1 the nesting lives in `x-tagGroups`, so a tag carries no parent.
+    const parent = nesting ? parentOf.get(name) : undefined;
+    return {
+      name,
+      ...(description !== undefined ? { description } : {}),
+      ...(parent !== undefined ? { parent } : {}),
+    };
+  });
+};
+
+/**
+ * Each member's group, refusing a declaration no viewer can draw: a tag in two
+ * groups would silently keep the last, and under 3.2 a group reaching itself
+ * through its members makes a `parent` chain with no root. Under 3.1 a group
+ * name is only a label, so a group may share its name with a member.
+ */
+const parentsOf = (
+  groups: readonly TagGroup[],
+  nesting: boolean,
+): Map<string, string> => {
+  const parentOf = new Map<string, string>();
+  for (const group of groups) {
+    for (const tag of group.tags) {
+      const earlier = parentOf.get(tag);
+      if (earlier !== undefined)
+        throw new Error(
+          `Tag "${tag}" is in both the "${earlier}" and "${group.name}" tag groups. A tag nests under one group.`,
+        );
+      parentOf.set(tag, group.name);
+    }
+  }
+  if (!nesting) return parentOf;
+  for (const start of parentOf.keys()) {
+    const seen = new Set<string>([start]);
+    for (
+      let at = parentOf.get(start);
+      at !== undefined;
+      at = parentOf.get(at)
+    ) {
+      if (seen.has(at))
+        throw new Error(
+          `Tag group "${at}" contains itself through ${[...seen].join(' > ')}.`,
+        );
+      seen.add(at);
+    }
+  }
+  return parentOf;
+};
+
+/**
+ * The tags a 3.1 viewer hides: Scalar and Redoc draw only grouped tags once
+ * `x-tagGroups` is present, so a route under any other tag drops out of the
+ * sidebar.
+ */
+const ungroupedWarning = (
+  tags: readonly TagObject[],
+  groups: readonly TagGroup[],
+): string[] => {
+  const grouped = new Set(groups.flatMap((group) => group.tags));
+  const loose = tags.filter((tag) => !grouped.has(tag.name));
+  return loose.length === 0
+    ? []
+    : [
+        `Tag(s) in no tag group, which Scalar and Redoc hide under x-tagGroups: ${loose
+          .map((tag) => tag.name)
+          .join(', ')}`,
+      ];
 };
 
 /**
@@ -196,8 +307,12 @@ export const generateDocument = async (
       : {}),
   };
 
+  const specVersion = info.specVersion ?? '3.1.0';
+  const tagGroups = info.tagGroups ?? [];
+  const grouped31 = specVersion === '3.1.0' && tagGroups.length > 0;
+
   const document: OpenApiDocument = {
-    openapi: '3.1.0',
+    openapi: specVersion,
     info: {
       title: info.title,
       version: info.version,
@@ -208,7 +323,13 @@ export const generateDocument = async (
     ...(info.servers !== undefined && info.servers.length > 0
       ? { servers: info.servers }
       : {}),
-    tags: tagsOf(operations),
+    tags: tagsOf(operations, tagGroups, specVersion),
+    // 3.2 states the nesting on each tag, so the extension would say it twice.
+    ...(grouped31
+      ? {
+          'x-tagGroups': tagGroups.map(({ name, tags }) => ({ name, tags })),
+        }
+      : {}),
     paths,
     components,
   };
@@ -231,6 +352,9 @@ export const generateDocument = async (
   const warnings = [
     ...store.warnings,
     ...merged.warnings,
+    ...(grouped31
+      ? ungroupedWarning(merged.document.tags ?? [], tagGroups)
+      : []),
     ...(dangling.length > 0
       ? [`Unresolved $ref(s) in the generated document: ${dangling.join(', ')}`]
       : []),
@@ -311,8 +435,12 @@ const mergeContributions = async (
       schemas[name] = titledAs(name, schema as JsonSchema);
     }
 
+    // A name already present keeps what it has, a 3.2 `parent` included, and
+    // takes only what it lacks, so a contributed description is not lost.
     for (const tag of fragment.tags ?? []) {
-      if (!tags.some((existing) => existing.name === tag.name)) tags.push(tag);
+      const at = tags.findIndex((existing) => existing.name === tag.name);
+      if (at === -1) tags.push(tag);
+      else tags[at] = { ...tag, ...tags[at] };
     }
   }
 

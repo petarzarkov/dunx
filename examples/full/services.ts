@@ -41,4 +41,8 @@ const served = await fromFirstRegistry(
   async (registry) => (await compose(['pull', '--quiet'], registry)) === 0,
 );
 console.log(`images from ${served.name}`);
-process.exit(await compose(['up', '-d', '--wait'], served));
+const code = await compose(['up', '-d', '--wait'], served);
+// `--wait` names the container that died but not why, and CI keeps nothing
+// once the job ends, so the reason goes into this step's log.
+if (code !== 0) await compose(['logs', '--no-color', '--tail', '60'], served);
+process.exit(code);

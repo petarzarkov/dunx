@@ -84,6 +84,31 @@ export const createApp = async (): Promise<HttpApp> => {
           'the routes validate against.\n\n[Back to the demo](/)',
         // A provider, asked for its fragment when the document is generated.
         contribute: [authDocs],
+        // A hierarchy the sidebar draws from, declared once beside the document
+        // rather than repeated on every operation. 3.1 carries it as
+        // `x-tagGroups`, which Scalar reads and Swagger UI ignores.
+        tagGroups: [
+          { name: 'Content', tags: ['Notes', 'Events', 'Demo'] },
+          {
+            name: 'Data',
+            tags: ['Crud', 'Versioning', 'Catalog', 'Ledger', 'Reports'],
+          },
+          { name: 'Media', tags: ['Files', 'Images'] },
+          { name: 'Accounts', tags: ['Auth', 'Users', 'Profile', 'Tenants'] },
+          { name: 'Background', tags: ['Jobs', 'Mail', 'Messaging'] },
+          {
+            name: 'Platform',
+            tags: [
+              'Wiring',
+              'Cookies',
+              'Cache',
+              'Limits',
+              'Health',
+              'Trace',
+              'Flaky',
+            ],
+          },
+        ],
         // Out of the factory because it closes over an `Auth` the container
         // owns, and spread because `exactOptionalPropertyTypes` separates absent
         // from explicitly undefined. `ReferenceMiddleware` gets the same gate.
