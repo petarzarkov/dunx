@@ -157,7 +157,7 @@ describe('provider construction scope', () => {
       @Module({ imports: [Owner] })
       class Client {}
 
-    const graph = buildScopes(Client);
+      const graph = buildScopes(Client);
       const injector = new Injector(graph);
       const service = await injector.resolve(Service);
       expect(service.config).toBe('owner');

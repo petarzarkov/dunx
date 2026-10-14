@@ -57,8 +57,8 @@ describe('OtelTracer with no SDK registered', () => {
   });
 
   it('accepts a remote parent', () => {
-    expect(tracer.span('remote', { parent: REMOTE }, (span) => span.ids())).toBe(
-      undefined,
-    );
+    expect(
+      tracer.span('remote', { parent: REMOTE }, (span) => span.ids()),
+    ).toBe(undefined);
   });
 });

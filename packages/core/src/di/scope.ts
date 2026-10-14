@@ -129,8 +129,12 @@ const exportSets = (
   const pending = [...modules];
   const queued = new Set<ModuleRef>(modules.map((m) => m.ref));
 
-  for (let at = 0; at < pending.length; at += 1) {
+  // A `while`, not `for...of`: the queue grows as dependents are appended, which
+  // a `for` loop over the array would hide behind its own iteration.
+  let at = 0;
+  while (at < pending.length) {
     const resolved = pending[at]!;
+    at += 1;
     queued.delete(resolved.ref);
     const set = sets.get(resolved.ref);
     const mine = own.get(resolved.ref);

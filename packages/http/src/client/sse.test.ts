@@ -122,6 +122,19 @@ describe('sseMessages', () => {
       await messages(streamOf('event: named\ndata: a\n\ndata: b\n\n')),
     ).toEqual([{ data: 'a', event: 'named' }, { data: 'b' }]);
   });
+
+  it('reads many events arriving in one chunk, in order', async () => {
+    const count = 100;
+    const chunk = Array.from(
+      { length: count },
+      (_, i) => `data: ${i}\n\n`,
+    ).join('');
+    const out = await messages(streamOf(chunk));
+    expect(out).toHaveLength(count);
+    expect(out.map((m) => m.data)).toEqual(
+      Array.from({ length: count }, (_, i) => String(i)),
+    );
+  });
 });
 
 describe('ConnectDeadline', () => {

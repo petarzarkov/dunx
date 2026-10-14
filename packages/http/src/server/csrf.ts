@@ -6,6 +6,7 @@ import { mapRoutes, type ServedHandler } from './middleware.js';
 import type { BunRoutes } from './routes.js';
 import { HttpStatusCode } from './status.js';
 import { ThrottledWarning } from './throttled-warning.js';
+import { pathnameOf } from './url.js';
 
 export interface CsrfOptions {
   /**
@@ -140,7 +141,7 @@ export class CsrfProtection {
   }
 
   #refuse(req: Request, reason: CsrfRefusal): Response {
-    const path = new URL(req.url).pathname;
+    const path = pathnameOf(req.url);
     const traceparent = req.headers.get('traceparent');
     this.#warning.warn(`CSRF refused ${req.method} ${path}`, {
       method: req.method,
