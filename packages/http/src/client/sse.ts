@@ -10,8 +10,21 @@ export interface SseMessage {
   readonly retry?: number;
 }
 
-/** A line ends at `\r\n`, `\n` or a bare `\r`. */
-const LINE = /\r\n|\r|\n/;
+/**
+ * The index and byte length of the next line ending at or after `offset`, or
+ * `undefined` when none remains. A `\r\n` is one ending of two characters.
+ */
+const nextLineEnd = (
+  buffer: string,
+  offset: number,
+): { readonly index: number; readonly length: number } | undefined => {
+  const lf = buffer.indexOf('\n', offset);
+  const cr = buffer.indexOf('\r', offset);
+  const index = lf === -1 ? cr : cr === -1 ? lf : Math.min(lf, cr);
+  if (index === -1) return undefined;
+  const length = buffer[index] === '\r' && buffer[index + 1] === '\n' ? 2 : 1;
+  return { index, length };
+};
 
 /** `field: value`, with one optional leading space stripped from the value. */
 const split = (line: string): readonly [string, string] => {
@@ -35,6 +48,7 @@ export async function* sseMessages(
 ): AsyncGenerator<SseMessage> {
   const decoder = new TextDecoder();
   let buffer = '';
+  let offset = 0;
   let data: string[] = [];
   let event: string | undefined;
   let id: string | undefined;
@@ -45,15 +59,22 @@ export async function* sseMessages(
 
   try {
     for (;;) {
-      let end = LINE.exec(buffer);
-      while (end !== null) {
+      // Lines are consumed by advancing `offset` rather than re-slicing the tail,
+      // so a chunk carrying many events is linear, not quadratic, in its lines.
+      for (;;) {
+        const ending = nextLineEnd(buffer, offset);
+        if (ending === undefined) break;
         // A trailing `\r` may be half of a `\r\n` in the next chunk, and taking
         // it as a line ending splits one event in two. Once the body has ended
         // nothing more is coming, so it is one.
-        if (!done && end[0] === '\r' && end.index + 1 === buffer.length) break;
-        const line = buffer.slice(0, end.index);
-        buffer = buffer.slice(end.index + end[0].length);
-        end = LINE.exec(buffer);
+        if (
+          !done &&
+          buffer[ending.index] === '\r' &&
+          ending.index + 1 === buffer.length
+        )
+          break;
+        const line = buffer.slice(offset, ending.index);
+        offset = ending.index + ending.length;
 
         // The blank line dispatches.
         if (line === '') {
@@ -90,6 +111,9 @@ export async function* sseMessages(
       }
 
       if (done) return;
+      // Drop the consumed prefix once per read, not once per line.
+      buffer = buffer.slice(offset);
+      offset = 0;
       const next = await reader.read();
       if (next.done) {
         buffer += decoder.decode();

@@ -54,10 +54,13 @@ export const boundedProbe = (
   );
 
 const worst = (checks: readonly HealthCheckReport[]): ProbeState => {
-  const critical = checks.filter((check) => check.critical);
-  if (critical.some((check) => check.state === 'down')) return 'down';
-  if (critical.some((check) => check.state === 'unknown')) return 'unknown';
-  return 'up';
+  let state: ProbeState = 'up';
+  for (const check of checks) {
+    if (!check.critical) continue;
+    if (check.state === 'down') return 'down';
+    if (check.state === 'unknown') state = 'unknown';
+  }
+  return state;
 };
 
 export class HealthOptions {

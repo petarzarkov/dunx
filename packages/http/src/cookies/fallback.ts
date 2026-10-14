@@ -1,6 +1,9 @@
 import type { CookieMap } from 'bun';
 import type { ServedHandler } from '../server/middleware.js';
 
+/** Shared so a fallback request that never touched a cookie allocates nothing. */
+const NO_SET_COOKIE: readonly string[] = [];
+
 /**
  * `req.cookies` for the `fetch` fallback, where Bun gives none.
  *
@@ -22,7 +25,7 @@ export const withRequestCookies =
       get: () => (map ??= new Bun.CookieMap(req.headers.get('cookie') ?? '')),
     });
     const apply = (response: Response): Response => {
-      for (const header of map?.toSetCookieHeaders() ?? []) {
+      for (const header of map?.toSetCookieHeaders() ?? NO_SET_COOKIE) {
         response.headers.append('set-cookie', header);
       }
       return response;

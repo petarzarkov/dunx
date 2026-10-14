@@ -16,6 +16,7 @@ import type { UpgradeHandler } from '../ws/adapter.js';
 import { buildContext, type RouteContext } from './context.js';
 import { preflight, withCors, type CorsOptions } from './cors.js';
 import { defaultErrorMapper, HttpError, type ErrorMapper } from './errors.js';
+import { pathnameOf } from './url.js';
 import type { EntityTags } from './etag.js';
 import { directOr, toResponse, type ResponseExtras } from './respond.js';
 import type { SecuredResponses } from './security-headers.js';
@@ -150,7 +151,7 @@ const unmatchedContext = (
     controller: '(unmatched)',
     handler: '(none)',
     method: req.method as HttpMethod,
-    path: new URL(req.url).pathname,
+    path: pathnameOf(req.url),
     // Nothing matched, so no schema read this body and nothing recorded it.
     parsesBody: false,
     get: <T>(key: MetaKey<T>): T | undefined => {
@@ -240,7 +241,7 @@ export const buildFallback = (
 
   const run: ServedHandler = async (req, server) => {
     if (req.method === 'OPTIONS') {
-      const answer = claimedPreflight.get(new URL(req.url).pathname);
+      const answer = claimedPreflight.get(pathnameOf(req.url));
       if (answer !== undefined) return answer(req);
     }
     try {
