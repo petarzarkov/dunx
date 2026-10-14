@@ -4,6 +4,55 @@ Every release, newest first. Written by `bun run version` from the commits in th
 release range. Every @dunx package shares one version and ships together, so a
 release covers all of them.
 
+## 3.10.3 - 2026-10-14
+
+OpenAPI tag groups, brotli compression, split cache TTLs
+
+OpenApiModule takes tagGroups, emitted as x-tagGroups under 3.1 or as a
+parent on each tag under specVersion 3.2.0. Compression offers brotli now
+that Bun 1.4.3 honours its level. TieredCacheStore takes separate local and
+remote TTLs, and core and http drop allocations on their hot paths.
+
+Breaking for 3.10.2 callers:
+
+- @Controller's route filter takes includes and excludes. The singular
+  include and exclude are gone.
+- @dunx/infra exports TieredCacheOptions in place of TieredCacheInit, and
+  promoteTtl is now ttl. An object still passing promoteTtl compiles only
+  when untyped, and its value is ignored for the 30s default.
+
+### Features
+
+- **openapi**: hierarchical tag groups, as x-tagGroups or 3.2 parent ([`9656a03`](https://github.com/petarzarkov/dunx/commit/9656a0346ad80733474459fbaf6fdd7da0b202c7))
+- **http**: brotli in Compression, now that Bun 1.4.3 honours its level ([`5f5ae7f`](https://github.com/petarzarkov/dunx/commit/5f5ae7f27f98f80ff2da488ebd77ded60e5d6b35))
+
+### Fixes
+
+- **openapi**: validate tag groups and warn on tags 3.1 viewers hide ([`ab773ff`](https://github.com/petarzarkov/dunx/commit/ab773ff900c91f4d9712dec864a67d7f5c17cb9d))
+- **mcp**: regenerate the corpus from LF sources ([`a2595be`](https://github.com/petarzarkov/dunx/commit/a2595bebeb921994b8d88551272493ff8a450210))
+- **http**: sync corpus and verify filter priority ([`deb0a18`](https://github.com/petarzarkov/dunx/commit/deb0a182722249ab4eae8fbc812ff5790aa8e234))
+- **http**: support plural controller filters ([`0b7abfd`](https://github.com/petarzarkov/dunx/commit/0b7abfdb1c15bdd4427cba34946a3f75bd5c8019))
+- **mcp**: regenerate corpus with LF sources ([`042f46a`](https://github.com/petarzarkov/dunx/commit/042f46a7d1917a95f9254d2c595297d726e28b1e))
+- **cache**: refresh generated corpus and docs ([`8635dc9`](https://github.com/petarzarkov/dunx/commit/8635dc987944d00ed33e34a82f5635701ac636ed))
+- **cache**: separate local and remote TTLs ([`9f98723`](https://github.com/petarzarkov/dunx/commit/9f987239a4f244c2464803615f5a430cafa9beff))
+
+### Performance
+
+- **http**: cut per-request allocations on the hot path ([`46a63d7`](https://github.com/petarzarkov/dunx/commit/46a63d7e9766229a7b413d318634b64cf10de590))
+- **core**: index token ownership, cut a pass from export sets, skip absent-SDK spans ([`fbc2cb0`](https://github.com/petarzarkov/dunx/commit/fbc2cb0feb08d028ee8a1203ec9aaade770588c2))
+- **http**: skip premature idempotency sweeps ([`a32b799`](https://github.com/petarzarkov/dunx/commit/a32b799e925b89f41200c556c035de8ecc9825e9))
+
+### Documentation
+
+- **notes**: re-measure the queue shutdown leak on Bun 1.4.3 ([`c9281d9`](https://github.com/petarzarkov/dunx/commit/c9281d9defaa2bbe0a075a8a2f385e028fe06798))
+
+### Other changes
+
+- **examples**: print the services' logs when compose up fails ([`b1fde30`](https://github.com/petarzarkov/dunx/commit/b1fde30843e4525554b560aeac3376946724837c))
+- **http**: drop the removed @Controller include and exclude aliases ([`d6f0519`](https://github.com/petarzarkov/dunx/commit/d6f05190951bfc788350b155aeaebec03b95bfd3))
+- **mcp**: regenerate the corpus for the tag hierarchy section ([`85d2d26`](https://github.com/petarzarkov/dunx/commit/85d2d26ccd35f61dd65babbe1cff40372b272eee))
+- **deps**: Bun 1.4.3 and the current dev tooling ([`cab0151`](https://github.com/petarzarkov/dunx/commit/cab0151e6a2f7a80619dbc88431ffd49d13b7733))
+
 ## 3.10.2 - 2026-10-08
 
 Providers resolve their dependencies in the module that declares them
