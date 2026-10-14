@@ -157,11 +157,64 @@ describe('provider construction scope', () => {
       @Module({ imports: [Owner] })
       class Client {}
 
-      const graph = buildScopes(Client);
+    const graph = buildScopes(Client);
       const injector = new Injector(graph);
       const service = await injector.resolve(Service);
       expect(service.config).toBe('owner');
       expect(injector.get(Service, graph.scopes.get(Owner))).toBe(service);
     });
   }
+});
+
+/** A class no module lists, so `get` self-binds it into the asking scope. */
+class Unlisted {}
+
+/**
+ * `find` answers "which scope declares this" from an index built when the
+ * injector is, so it has to stay right through a self-bind - the one thing that
+ * adds an own binding afterwards. A stale index here would silently construct a
+ * second instance in the root scope.
+ */
+describe('resolving a token from the module that declares it', () => {
+  it('answers from the one declaring module', () => {
+    @Module({
+      providers: [provide(PrivateConfig, { useValue: 'owner' })],
+    })
+    class Owner {}
+    @Module({ imports: [Owner] })
+    class Client {}
+
+    const injector = new Injector(buildScopes(Client));
+    expect(injector.find(PrivateConfig)).toBe('owner');
+  });
+
+  it('refuses a token two modules declare', () => {
+    @Module({ providers: [provide(PrivateConfig, { useValue: 'first' })] })
+    class First {}
+    @Module({ providers: [provide(PrivateConfig, { useValue: 'second' })] })
+    class Second {}
+    @Module({ imports: [First, Second] })
+    class Root {}
+
+    const injector = new Injector(buildScopes(Root));
+    expect(() => injector.find(PrivateConfig)).toThrow(
+      'cannot say which you mean',
+    );
+  });
+
+  it('finds a self-bound class in the scope it landed in', () => {
+    @Module({})
+    class Feature {}
+    @Module({ imports: [Feature] })
+    class Root {}
+
+    const graph = buildScopes(Root);
+    const injector = new Injector(graph);
+    const feature = graph.scopes.get(Feature);
+    if (feature === undefined) throw new Error('no scope for Feature');
+
+    const bound = injector.get(Unlisted, feature);
+
+    expect(injector.find(Unlisted)).toBe(bound);
+  });
 });
