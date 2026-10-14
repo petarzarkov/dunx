@@ -89,8 +89,25 @@ export const createApp = async (): Promise<HttpApp> => {
         // `x-tagGroups`, which Scalar reads and Swagger UI ignores.
         tagGroups: [
           { name: 'Content', tags: ['Notes', 'Events', 'Demo'] },
-          { name: 'Data', tags: ['Crud', 'Versioning'] },
-          { name: 'Platform', tags: ['Wiring', 'Cookies'] },
+          {
+            name: 'Data',
+            tags: ['Crud', 'Versioning', 'Catalog', 'Ledger', 'Reports'],
+          },
+          { name: 'Media', tags: ['Files', 'Images'] },
+          { name: 'Accounts', tags: ['Auth', 'Users', 'Profile', 'Tenants'] },
+          { name: 'Background', tags: ['Jobs', 'Mail', 'Messaging'] },
+          {
+            name: 'Platform',
+            tags: [
+              'Wiring',
+              'Cookies',
+              'Cache',
+              'Limits',
+              'Health',
+              'Trace',
+              'Flaky',
+            ],
+          },
         ],
         // Out of the factory because it closes over an `Auth` the container
         // owns, and spread because `exactOptionalPropertyTypes` separates absent

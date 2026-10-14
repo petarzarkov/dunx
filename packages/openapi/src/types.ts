@@ -105,6 +105,8 @@ export interface TagObject {
  */
 export interface TagGroup {
   readonly name: string;
+  /** 3.2 only, on the group's own tag. `x-tagGroups` has no field for it. */
+  readonly description?: string;
   readonly tags: readonly string[];
 }
 
@@ -117,7 +119,7 @@ export interface OpenApiDocument {
   readonly servers?: readonly ServerObject[];
   readonly tags?: readonly TagObject[];
   /** 3.1 only: 3.2 carries the hierarchy on each tag's `parent` instead. */
-  readonly 'x-tagGroups'?: readonly TagGroup[];
+  readonly 'x-tagGroups'?: readonly Omit<TagGroup, 'description'>[];
   readonly paths: Readonly<Record<string, PathItemObject>>;
   readonly components: ComponentsObject;
 }

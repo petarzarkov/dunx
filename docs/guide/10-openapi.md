@@ -306,6 +306,16 @@ tags:
 Scalar and Redoc read `x-tagGroups`; Swagger UI ignores it. `parent` is 3.2 only,
 so a 3.1 document carries no `parent`.
 
+Under 3.1, Scalar and Redoc hide a tag that is in no group, so the generator
+lists each one in `OpenApiExplorer.warnings`. A contributed tag counts, so
+Better Auth's tag belongs in a group too. Under 3.2 an ungrouped tag sits at the
+top level and raises no warning.
+
+A group's optional `description` goes on its tag under 3.2. `x-tagGroups` has
+no field for it, so 3.1 drops it. Generation throws for a tag in two groups,
+and under 3.2 for a group that contains itself directly or through another
+group. Under 3.1 a group name is only a label, so it may match a member.
+
 ## Security comes from the guards' own metadata
 
 The document reads the same `@Public()` and `@Roles()` that the guards read at

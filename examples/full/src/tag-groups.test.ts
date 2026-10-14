@@ -33,9 +33,33 @@ it('serves the declared tag hierarchy as 3.1 x-tagGroups', async () => {
 
   expect(document['x-tagGroups']).toEqual([
     { name: 'Content', tags: ['Notes', 'Events', 'Demo'] },
-    { name: 'Data', tags: ['Crud', 'Versioning'] },
-    { name: 'Platform', tags: ['Wiring', 'Cookies'] },
+    {
+      name: 'Data',
+      tags: ['Crud', 'Versioning', 'Catalog', 'Ledger', 'Reports'],
+    },
+    { name: 'Media', tags: ['Files', 'Images'] },
+    { name: 'Accounts', tags: ['Auth', 'Users', 'Profile', 'Tenants'] },
+    { name: 'Background', tags: ['Jobs', 'Mail', 'Messaging'] },
+    {
+      name: 'Platform',
+      tags: [
+        'Wiring',
+        'Cookies',
+        'Cache',
+        'Limits',
+        'Health',
+        'Trace',
+        'Flaky',
+      ],
+    },
   ]);
+  // Scalar hides a tag in no group, so every tag the document declares is in one.
+  const grouped = new Set(
+    (document['x-tagGroups'] as { tags: string[] }[]).flatMap((g) => g.tags),
+  );
+  expect(
+    (document.tags ?? []).map((t) => t.name).filter((n) => !grouped.has(n)),
+  ).toEqual([]);
   // 3.1 carries the nesting here, so no tag repeats it as a 3.2 `parent`.
   for (const tag of document.tags ?? []) expect(tag.parent).toBeUndefined();
 });
