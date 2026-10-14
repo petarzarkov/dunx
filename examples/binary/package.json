@@ -9,7 +9,7 @@
     "start": "bun src/main.ts",
     "build": "bun scripts/build.ts",
     "test": "bun test",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "bun check"
   },
   "dependencies": {
     "@dunx/core": "workspace:*",

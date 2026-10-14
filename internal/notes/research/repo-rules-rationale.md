@@ -689,8 +689,12 @@ then not cover it.
 bun run typecheck     # all packages: bun run --filter '*' typecheck
 ```
 
-Within a package: `tsc --noEmit`. The root `tsconfig.json` includes `scripts/`,
-so `bunx tsc --noEmit` at the repo root typechecks the repo scripts.
+Within a package: `bun check`, Bun's built-in checker (1.4.3). It reports the
+same diagnostics as `tsc` 7 and ran every workspace in 2.5s against 6-7.5s. In
+GitHub Actions it also emits `::error` annotations. `tsc` stays for `.d.ts` emit
+in `build`, and in `examples/minimal` and the create-app templates, whose
+manifests ship to consumers on Bun 1.4.1. The root `tsconfig.json` includes
+`scripts/`, so `bun check` at the repo root typechecks the repo scripts.
 
 **`internal/docs/src/generated/` is a build output, and `build` owns it.** The docs
 `typecheck` passes `bun run generate --if-missing`, which does nothing when the

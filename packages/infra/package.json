@@ -139,7 +139,7 @@
     "build": "bun ../../scripts/build-package.ts",
     "test": "bun test --bail",
     "test:cov": "bun test --coverage",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "bun check"
   },
   "dependencies": {
     "@arkv/logger": "0.13.0",

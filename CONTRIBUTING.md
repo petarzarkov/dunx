@@ -12,12 +12,12 @@ which routes it to a private advisory rather than a public issue.
 
 ## Prerequisites
 
-**Bun 1.3 or newer, and nothing else.** Bun is the runtime, the test runner, the
+**Bun 1.4.3 or newer, and nothing else.** Bun is the runtime, the test runner, the
 bundler and the package manager.
 
 ```bash
 curl -fsSL https://bun.sh/install | bash
-bun --version   # CI pins 1.3.14
+bun --version   # CI pins 1.4.3
 ```
 
 `npm`, `npx`, `yarn` and `pnpm` are never used in this repo. Run tools with
@@ -77,7 +77,7 @@ Run these before you push. CI runs the same set, in this order.
 | `bun run build`        | Topological build of every workspace, JS plus `.d.ts`                       |
 | `bun run lint:check`   | oxlint, no fixing                                                           |
 | `bun run format:check` | oxfmt, no writing                                                           |
-| `bun run typecheck`    | `tsc --noEmit` in every workspace                                           |
+| `bun run typecheck`    | `bun check` in every workspace                                              |
 | `bun run test:cov`     | One root run over `./packages ./scripts`, then rebuilds the coverage report |
 | `bun run test`         | Every workspace's own suite, bailing on first failure                       |
 

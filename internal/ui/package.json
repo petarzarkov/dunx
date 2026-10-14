@@ -25,7 +25,7 @@
   "scripts": {
     "gen:logo": "bun ./scripts/gen-logo.ts",
     "test": "bun test --bail",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "bun check"
   },
   "dependencies": {
     "@mantine/core": "8.3.18",
