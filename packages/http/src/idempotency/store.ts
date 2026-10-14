@@ -207,6 +207,8 @@ interface Entry {
 export class MemoryIdempotencyStore extends IdempotencyStore {
   readonly #entries = new Map<string, Entry>();
   readonly #maxKeys: number;
+  /** A lower bound: removing or extending an entry may leave it early, never late. */
+  #nextExpiry = Infinity;
 
   constructor(maxKeys = 10_000) {
     super();
@@ -221,7 +223,7 @@ export class MemoryIdempotencyStore extends IdempotencyStore {
     const now = Date.now();
     if (this.#live(key, now) !== undefined) return Promise.resolve(false);
     if (this.#entries.size >= this.#maxKeys) this.#sweep(now);
-    this.#entries.set(key, {
+    this.#set(key, {
       record: { state: 'pending', fingerprint: claim.fingerprint },
       token: claim.token,
       expiresAt: now + leaseMs,
@@ -240,7 +242,7 @@ export class MemoryIdempotencyStore extends IdempotencyStore {
     ttlMs: number,
   ): Promise<void> {
     if (this.#live(key, Date.now())?.token === claim.token) {
-      this.#entries.set(key, {
+      this.#set(key, {
         record: { state: 'done', fingerprint: claim.fingerprint, response },
         token: undefined,
         expiresAt: Date.now() + ttlMs,
@@ -263,9 +265,19 @@ export class MemoryIdempotencyStore extends IdempotencyStore {
     return undefined;
   }
 
+  #set(key: string, entry: Entry): void {
+    this.#entries.set(key, entry);
+    if (entry.expiresAt < this.#nextExpiry) this.#nextExpiry = entry.expiresAt;
+  }
+
   #sweep(now: number): void {
-    for (const [key, entry] of this.#entries) {
-      if (entry.expiresAt <= now) this.#entries.delete(key);
+    if (this.#nextExpiry <= now) {
+      this.#nextExpiry = Infinity;
+      for (const [key, entry] of this.#entries) {
+        if (entry.expiresAt <= now) this.#entries.delete(key);
+        else if (entry.expiresAt < this.#nextExpiry)
+          this.#nextExpiry = entry.expiresAt;
+      }
     }
     // Insertion order is age order, so the first key is the oldest.
     const oldest = this.#entries.keys().next();

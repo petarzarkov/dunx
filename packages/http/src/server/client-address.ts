@@ -3,7 +3,8 @@ import { AppError } from '@dunx/core';
 
 interface AddressSource {
   readonly server: Server<unknown>;
-  readonly trustProxy: boolean | number;
+  /** `trustProxy` folded to a hop count once at attach, not per request. */
+  readonly hops: number;
 }
 
 /**
@@ -27,11 +28,24 @@ export const forwardedEntry = (
   hops: number,
 ): string | undefined => {
   if (hops <= 0 || header === null) return undefined;
-  const entries = header
-    .split(',')
-    .map((entry) => entry.trim())
-    .filter((entry) => entry.length > 0);
-  return entries[Math.max(0, entries.length - hops)];
+  // Scan from the right, counting non-blank entries, so a single trusted proxy
+  // reads the last entry without building the split/map/filter arrays the
+  // previous form allocated on every call. Fewer entries than `hops` clamps to
+  // the leftmost, which the caller asked for by trusting more than is named.
+  let remaining = hops;
+  let segmentEnd = header.length;
+  for (let i = header.length - 1; i >= 0; i--) {
+    if (header[i] !== ',') continue;
+    const entry = header.slice(i + 1, segmentEnd).trim();
+    segmentEnd = i;
+    if (entry.length === 0) continue;
+    remaining -= 1;
+    if (remaining === 0) return entry;
+  }
+  // Ran out of entries first: the leftmost non-blank entry is what is left
+  // before the first comma, or nothing when the header is all blank.
+  const first = header.slice(0, segmentEnd).trim();
+  return first.length > 0 ? first : undefined;
 };
 
 /**
@@ -84,7 +98,7 @@ export class ClientAddress {
     // sent, which a caller may invent.
     const entry = forwardedEntry(
       req.headers.get('x-forwarded-for'),
-      trustedHops(source.trustProxy),
+      source.hops,
     );
     if (entry) return unmap(entry);
     return unmap(source.server.requestIP(req)?.address);
@@ -94,7 +108,13 @@ export class ClientAddress {
 /** Internal: `listen()` hands the bound server to the resolved singleton. */
 export const attachAddressSource = (
   target: ClientAddress,
-  source: AddressSource,
+  source: {
+    readonly server: Server<unknown>;
+    readonly trustProxy: boolean | number;
+  },
 ): void => {
-  sources.set(target, source);
+  sources.set(target, {
+    server: source.server,
+    hops: trustedHops(source.trustProxy),
+  });
 };

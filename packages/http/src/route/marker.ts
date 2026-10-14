@@ -67,13 +67,13 @@ export const routeMetaOf = (value: unknown): RouteMeta | undefined =>
   typeof value === 'function' ? (value as RouteMarked)[ROUTE] : undefined;
 
 /**
- * Which handlers a controller keeps, by method name: `include` first, then
- * `exclude`. It is how a subclass of a generic base serves part of what it
+ * Which handlers a controller keeps, by method name: `includes` first, then
+ * `excludes`. It is how a subclass of a generic base serves part of what it
  * inherits.
  */
 export interface RouteFilter<N extends string = string> {
-  readonly include?: readonly N[];
-  readonly exclude?: readonly N[];
+  readonly includes?: readonly N[];
+  readonly excludes?: readonly N[];
 }
 
 /** `@Controller`'s second argument: the route filter, and the version. */

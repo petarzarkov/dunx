@@ -135,7 +135,7 @@ describe('discoverRoutes()', () => {
   });
 });
 
-describe('@Controller include and exclude', () => {
+describe('@Controller includes and excludes', () => {
   abstract class Crud {
     @Get('/')
     getList(): string {
@@ -151,22 +151,25 @@ describe('@Controller include and exclude', () => {
     }
   }
 
-  it('drops the handlers exclude names, inherited or not', () => {
-    @Controller('ex', { exclude: ['remove'] })
+  it('drops the handlers in excludes, inherited or not', () => {
+    @Controller('ex', { excludes: ['remove'] })
     class Excluding extends Crud {}
 
     expect(routesOf(new Excluding())).toEqual(['GET /ex', 'GET /ex/:id']);
   });
 
-  it('keeps only the handlers include names, then applies exclude', () => {
-    @Controller('in', { include: ['getList', 'remove'], exclude: ['remove'] })
+  it('keeps only the handlers in includes, then applies excludes', () => {
+    @Controller('in', {
+      includes: ['getList', 'remove'],
+      excludes: ['remove'],
+    })
     class Including extends Crud {}
 
     expect(routesOf(new Including())).toEqual(['GET /in']);
   });
 
   it('reads the filter off the class, so an inert instance agrees', () => {
-    @Controller('inert', { exclude: ['getOne', 'remove'] })
+    @Controller('inert', { excludes: ['getOne', 'remove'] })
     class Inert extends Crud {}
 
     expect(routesOf(Object.create(Inert.prototype) as object)).toEqual([
@@ -175,7 +178,7 @@ describe('@Controller include and exclude', () => {
   });
 
   it('does not carry a base filter into a re-decorated subclass', () => {
-    @Controller('base', { exclude: ['remove'] })
+    @Controller('base', { excludes: ['remove'] })
     class Filtered extends Crud {}
     @Controller('child')
     class Child extends Filtered {}
@@ -189,24 +192,24 @@ describe('@Controller include and exclude', () => {
 
   it('rejects a name the class does not have, at compile time', () => {
     // @ts-expect-error `remvoe` is not a member of Crud
-    @Controller('typo', { exclude: ['remvoe'] })
+    @Controller('typo', { excludes: ['remvoe'] })
     class Typo extends Crud {}
 
     expect(() => discoverRoutes(new Typo())).toThrow('Typo lists remvoe');
   });
 
-  it('refuses a key other than include, exclude and version', () => {
+  it('refuses a key other than the filters and version', () => {
     const exlude = { exlude: ['remove'] } as never;
     @Controller('key', exlude)
     class Misspelt extends Crud {}
 
     expect(() => discoverRoutes(new Misspelt())).toThrow(
-      'Misspelt passes exlude to @Controller, which takes include, exclude and version',
+      'Misspelt passes exlude to @Controller, which takes includes, excludes and version',
     );
   });
 
   it('treats an explicit undefined list as absent', () => {
-    const filter = { include: undefined, exclude: ['remove'] } as never;
+    const filter = { includes: undefined, excludes: ['remove'] } as never;
     @Controller('undef', filter)
     class Undef extends Crud {}
 
@@ -214,7 +217,7 @@ describe('@Controller include and exclude', () => {
   });
 
   it('refuses a name that is not a route, naming it', () => {
-    @Controller('bad', { exclude: ['helper'] })
+    @Controller('bad', { excludes: ['helper'] })
     class Bad extends Crud {
       helper(): string {
         return 'not a route';
@@ -222,7 +225,17 @@ describe('@Controller include and exclude', () => {
     }
 
     expect(() => discoverRoutes(new Bad())).toThrow(
-      'Bad lists helper in @Controller exclude, but it is not a route handler',
+      'Bad lists helper in @Controller excludes, but it is not a route handler',
+    );
+  });
+
+  it('refuses the removed singular names, at compile time and at runtime', () => {
+    // @ts-expect-error `include` and `exclude` were removed in favour of the plurals
+    @Controller('legacy', { include: ['getList'], exclude: ['remove'] })
+    class Legacy extends Crud {}
+
+    expect(() => discoverRoutes(new Legacy())).toThrow(
+      'Legacy passes include to @Controller, which takes includes, excludes and version',
     );
   });
 });

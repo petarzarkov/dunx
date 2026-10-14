@@ -30,7 +30,7 @@ const byId = { params: z.object({ id: z.string() }) } as const;
 
 /**
  * Every handler is declared once, here. A subclass picks which of them it serves
- * with `@Controller(prefix, { include, exclude })`, which is read off the class,
+ * with `@Controller(prefix, { includes, excludes })`, which is read off the class,
  * so the server, `@dunx/testing` and the OpenAPI document agree on the routes.
  */
 export abstract class CrudController<T extends Row> {

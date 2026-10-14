@@ -85,7 +85,8 @@ class NoopSpan extends ActiveSpan {
   }
 }
 
-const NOOP_SPAN = new NoopSpan();
+/** One instance, since it holds nothing. Shared with `OtelTracer`'s no-SDK path. */
+export const NOOP_SPAN = new NoopSpan();
 
 /**
  * The default binding. A seam on a hot path checks `instanceof NoopTracer` once,

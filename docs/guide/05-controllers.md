@@ -147,8 +147,8 @@ mounting at the root.
 ### A generic base controller
 
 Routes declared on an abstract base are served by every subclass. A subclass
-picks which of them it serves with `include` and `exclude`, by handler name.
-`include` applies first, then `exclude`:
+picks which of them it serves with `includes` and `excludes`, by handler name.
+`includes` applies first, then `excludes`:
 
 ```ts
 abstract class CrudController<T extends Row> {
@@ -165,7 +165,7 @@ abstract class CrudController<T extends Row> {
   }
 }
 
-@Controller('colors', { exclude: ['remove'] })
+@Controller('colors', { excludes: ['remove'] })
 class ColorsController extends CrudController<Color> {
   constructor(store: ColorsStore) {
     super(store);

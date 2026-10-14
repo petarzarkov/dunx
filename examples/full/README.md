@@ -60,7 +60,7 @@ that check, because a service never exits.
 | ------------------------------------- | ------------------------------------------------------------------------- |
 | `/api/users`                          | `@dunx/http` - zod on params, query and body; 201 from the verb           |
 | `/api/notes`                          | the global prefix, middleware, CORS                                       |
-| `/api/colors`                         | a generic `CrudController` base, served with `exclude: ['remove']`        |
+| `/api/colors`                         | a generic `CrudController` base, served with `excludes: ['remove']`        |
 | `/api/v1/swatches`, `/api/v2/swatches` | URI versioning; v1 is `@Deprecated` and sends `Deprecation` and `Sunset` |
 | `/api/preferences` | `SignedCookies` - a signed, `HttpOnly`, `Secure` theme cookie |
 | `/api/ledger`                         | `@dunx/infra/db` - drizzle over `bun:sqlite`, seeds, transactions         |
