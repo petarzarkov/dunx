@@ -37,6 +37,14 @@ class PendingSignal {
 export class Injector {
   readonly #graph: ScopeGraph;
   readonly #owners = new Map<Binding, Scope>();
+  /**
+   * The scopes that declare each token, in import order, so `find` can answer
+   * "who declares this" without scanning the graph. Built once, because the graph
+   * is settled by the time the injector exists: overrides mutate `scope.own`
+   * before this runs, and the only mutation after it is self-binding, which
+   * `#declare` records.
+   */
+  readonly #declared = new Map<InjectionToken<unknown>, Scope[]>();
   readonly #instances = new Map<Binding, unknown>();
   readonly #settling = new Map<Binding, Promise<unknown>>();
   readonly #building: { binding: Binding; token: InjectionToken<unknown> }[] =
@@ -48,10 +56,18 @@ export class Injector {
   constructor(graph: ScopeGraph) {
     this.#graph = graph;
     for (const scope of graph.ordered) {
-      for (const binding of scope.own.values()) {
+      for (const [token, binding] of scope.own) {
         this.#owners.set(binding, scope);
+        this.#declare(token, scope);
       }
     }
+  }
+
+  /** The one writer of `#declared`, so it cannot drift from `scope.own`. */
+  #declare(token: InjectionToken<unknown>, scope: Scope): void {
+    const owners = this.#declared.get(token);
+    if (owners === undefined) this.#declared.set(token, [scope]);
+    else if (!owners.includes(scope)) owners.push(scope);
   }
 
   get graph(): ScopeGraph {
@@ -144,7 +160,7 @@ export class Injector {
     if (preferred?.visible.has(key) === true) return this.get(token, preferred);
     if (this.#graph.root.visible.has(key)) return this.get(token);
 
-    const owners = this.#graph.ordered.filter((scope) => scope.own.has(key));
+    const owners = this.#declared.get(key) ?? [];
     if (owners.length > 1) {
       throw new AppError(
         `${describeToken(token)} is declared by ${owners
@@ -236,7 +252,7 @@ export class Injector {
      * self-binding it produced "did @dunx/transform run?" instead of "AuthModule does
      * not export it".
      */
-    const declared = this.#graph.ordered.some((other) => other.own.has(token));
+    const declared = (this.#declared.get(token)?.length ?? 0) > 0;
     if (isCtor(token) && !declared) {
       const created: Binding = {
         provider: { kind: 'class', ctor: token },
@@ -244,6 +260,10 @@ export class Injector {
       };
       scope.own.set(token, created);
       scope.visible.set(token, created);
+      // `find` reads `#declared`, and a self-bind is an own binding like any
+      // other: without this a later `app.get()` would miss it and construct a
+      // second instance in the root scope.
+      this.#declare(token, scope);
       return created;
     }
 

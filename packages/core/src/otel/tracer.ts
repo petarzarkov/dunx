@@ -12,6 +12,7 @@ import {
 import type { TraceIds } from '../logger/traceparent.js';
 import {
   ActiveSpan,
+  NOOP_SPAN,
   Tracer,
   type SpanAttributeValue,
   type SpanKind,
@@ -75,6 +76,20 @@ export class OtelTracer extends Tracer {
     }
     if (options.startTime !== undefined) started.startTime = options.startTime;
     const span = this.#tracer.startSpan(name, started, parent);
+
+    /**
+     * No SDK registered, so the API hands back its non-recording span: nothing
+     * will be recorded and no exported trace changes if `fn` runs outside this
+     * span's context. Handing it the shared no-op instead skips an `OtelSpan`,
+     * the failure closure and the `context.with` that threads it - which is the
+     * shape `NoopTracer` already has, reached without the container having to
+     * decide at boot whether an SDK will ever appear.
+     */
+    if (!span.isRecording()) {
+      span.end();
+      return fn(NOOP_SPAN);
+    }
+
     const active = new OtelSpan(span);
     const failed = (error: unknown): never => {
       active.recordError(error);

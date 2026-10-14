@@ -93,9 +93,12 @@ const ownBindings = (
  * `exports` may name a module, which re-exports whatever *that* module exports - so
  * `A exports B` and `B exports A` makes the two sets mutually dependent and naive
  * recursion overflows. It is not a real cycle: an export set is a union, union is
- * monotonic, so repeating the pass until nothing changes terminates in at most one
- * pass per module. Collapsing strongly-connected components first would be the same
- * answer with fewer passes, and is an optimisation rather than the design.
+ * monotonic, so repeating until nothing changes terminates.
+ *
+ * Only a module whose source grew is revisited, rather than every module on every
+ * pass. The set is a union over sources, so a module that added nothing cannot
+ * change what its dependents see, and the loop over all modules always spent a
+ * second full pass discovering it had nothing left to do.
  */
 const exportSets = (
   modules: readonly ResolvedModule[],
@@ -105,37 +108,70 @@ const exportSets = (
     modules.map((m) => [m.ref, new Map()]),
   );
 
-  for (let changed = true; changed;) {
-    changed = false;
-    for (const resolved of modules) {
-      const set = sets.get(resolved.ref);
-      const mine = own.get(resolved.ref);
-      if (!set || !mine) continue;
+  /**
+   * What a module's set is a union over: the modules it imports, and the ones it
+   * re-exports by naming them. Inverted, so a set that grows can find the modules
+   * that have to be recomputed.
+   */
+  const dependents = new Map<ModuleRef, ResolvedModule[]>();
+  for (const resolved of modules) {
+    const sources = new Set<ModuleRef>(resolved.options.imports ?? []);
+    for (const entry of resolved.options.exports ?? []) {
+      if (!isToken(entry)) sources.add(entry);
+    }
+    for (const source of sources) {
+      const list = dependents.get(source);
+      if (list) list.push(resolved);
+      else dependents.set(source, [resolved]);
+    }
+  }
 
-      for (const entry of resolved.options.exports ?? []) {
-        if (isToken(entry)) {
-          // Own binding first; otherwise it is a re-export of something an import
-          // exposes, which later passes fill in.
-          const binding =
-            mine.get(entry) ??
-            (resolved.options.imports ?? [])
-              .map((imported) => sets.get(imported)?.get(entry))
-              .find((found) => found !== undefined);
-          if (binding && !set.has(entry)) {
-            set.set(entry, binding);
-            changed = true;
-          }
-          continue;
+  const pending = [...modules];
+  const queued = new Set<ModuleRef>(modules.map((m) => m.ref));
+
+  // A `while`, not `for...of`: the queue grows as dependents are appended, which
+  // a `for` loop over the array would hide behind its own iteration.
+  let at = 0;
+  while (at < pending.length) {
+    const resolved = pending[at]!;
+    at += 1;
+    queued.delete(resolved.ref);
+    const set = sets.get(resolved.ref);
+    const mine = own.get(resolved.ref);
+    if (!set || !mine) continue;
+
+    let grew = false;
+    for (const entry of resolved.options.exports ?? []) {
+      if (isToken(entry)) {
+        // Own binding first; otherwise it is a re-export of something an import
+        // exposes, which a later visit fills in.
+        const binding =
+          mine.get(entry) ??
+          (resolved.options.imports ?? [])
+            .map((imported) => sets.get(imported)?.get(entry))
+            .find((found) => found !== undefined);
+        if (binding && !set.has(entry)) {
+          set.set(entry, binding);
+          grew = true;
         }
-        for (const [token, binding] of sets.get(entry) ?? []) {
-          if (!set.has(token)) {
-            set.set(token, binding);
-            changed = true;
-          }
+        continue;
+      }
+      for (const [token, binding] of sets.get(entry) ?? []) {
+        if (!set.has(token)) {
+          set.set(token, binding);
+          grew = true;
         }
       }
     }
+
+    if (!grew) continue;
+    for (const dependent of dependents.get(resolved.ref) ?? []) {
+      if (queued.has(dependent.ref)) continue;
+      queued.add(dependent.ref);
+      pending.push(dependent);
+    }
   }
+
   return sets;
 };
 
