@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it } from 'bun:test';
 import { ConsoleLogger } from './console.js';
 import { AsyncRequestContext } from './context.js';
+import type { LogFilter } from './filter.js';
 import { LogLevel } from './types.js';
 
 /**
@@ -274,5 +275,142 @@ describe('ConsoleLogger buffering', () => {
       console.log = original.log;
     }
     expect(seen).toHaveLength(2);
+  });
+});
+
+/** The one entry hook this logger carries. See `LoggerConfig.filters` upstream. */
+describe('ConsoleLogger with filters', () => {
+  const maskPassword: LogFilter = (entry) => ({
+    ...entry,
+    password: '[MASKED]',
+  });
+
+  const dropHealthChecks: LogFilter = (entry) =>
+    String(entry['event']).startsWith('/health') ? undefined : entry;
+
+  const dropToken: LogFilter = (entry) => {
+    const next = { ...entry };
+    delete next['token'];
+    return next;
+  };
+
+  it('writes what the filter returned, not the entry it built', () => {
+    const logger = new ConsoleLogger(undefined, 'info', true, [maskPassword]);
+    const { out } = capture(() =>
+      logger.info('sign-in', { password: 'hunter2' }),
+    );
+
+    expect(out).toHaveLength(1);
+    expect(out[0]?.['password']).toBe('[MASKED]');
+  });
+
+  it('writes nothing at all for an entry a filter dropped', () => {
+    const logger = new ConsoleLogger(undefined, 'info', true, [
+      dropHealthChecks,
+    ]);
+    const { out, err } = capture(() => {
+      logger.info('probe', { event: '/health/live' });
+      logger.error('probe', { event: '/health/ready' });
+    });
+
+    expect(out).toEqual([]);
+    expect(err).toEqual([]);
+  });
+
+  it('removes one field and leaves the rest of the entry alone', () => {
+    const logger = new ConsoleLogger(undefined, 'info', true, [dropToken]);
+    const { out } = capture(() =>
+      logger.info('call', { token: 'abc', route: '/users' }),
+    );
+
+    expect(out[0]).toEqual({
+      level: 'info',
+      timestamp: expect.any(String),
+      pid: expect.any(Number),
+      message: 'call',
+      route: '/users',
+    });
+  });
+
+  it('stops at the first filter that drops, in array order', () => {
+    let reached = 0;
+    const after: LogFilter = (entry) => {
+      reached += 1;
+      return entry;
+    };
+    const logger = new ConsoleLogger(undefined, 'info', true, [
+      dropHealthChecks,
+      after,
+    ]);
+
+    capture(() => logger.info('probe', { event: '/health/live' }));
+
+    expect(reached).toBe(0);
+  });
+
+  it('does not run a filter for an entry the level already dropped', () => {
+    let reached = 0;
+    const watch: LogFilter = (entry) => {
+      reached += 1;
+      return entry;
+    };
+    const logger = new ConsoleLogger(undefined, 'warn', true, [watch]);
+
+    capture(() => {
+      logger.info('below the level');
+      logger.warn('at the level');
+    });
+
+    expect(reached).toBe(1);
+  });
+});
+
+/**
+ * The report goes to stderr as text, so it is read raw: `capture` above parses
+ * every line as JSON, which an entry is and a diagnostic is not.
+ */
+const rawCapture = (run: () => void): { out: string[]; err: string[] } => {
+  const out: string[] = [];
+  const err: string[] = [];
+  console.log = (line: unknown) => out.push(String(line));
+  console.error = (line: unknown) => err.push(String(line));
+  try {
+    run();
+    new ConsoleLogger().flush();
+  } finally {
+    console.log = original.log;
+    console.error = original.error;
+  }
+  return { out, err };
+};
+
+describe('ConsoleLogger with a filter that throws', () => {
+  const boom: LogFilter = () => {
+    throw new Error('filter boom');
+  };
+
+  it('does not fail the logging call, and writes nothing', () => {
+    const logger = new ConsoleLogger(undefined, 'info', true, [boom]);
+    const { out, err } = rawCapture(() => {
+      expect(() => logger.info('x')).not.toThrow();
+    });
+
+    // Fail closed. The unfiltered entry is exactly what a redacting filter exists
+    // to keep out of the sink, so writing it would be the wrong recovery.
+    expect(out).toEqual([]);
+    expect(err).toHaveLength(1);
+    expect(err[0]).toContain('a log filter threw');
+  });
+
+  it('reports once, not once per entry', () => {
+    const logger = new ConsoleLogger(undefined, 'info', true, [boom]);
+    const { err } = rawCapture(() => {
+      logger.info('one');
+      logger.info('two');
+      logger.warn('three');
+    });
+
+    // A broken filter on a request path would otherwise write a line per request.
+    expect(err).toHaveLength(1);
   });
 });

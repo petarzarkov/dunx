@@ -5,6 +5,7 @@ export {
   type RequestFields,
   type RunWithContextOptions,
 } from './context.js';
+export { runFilters, type LogFilter } from './filter.js';
 export { Logger, type LogMessage } from './logger.js';
 // Runtime identity for a process's first entry. In core rather than in `@dunx/http`,
 // which is what writes that entry today, because "which bun is this" belongs to no

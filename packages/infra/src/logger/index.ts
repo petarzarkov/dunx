@@ -49,10 +49,14 @@ export {
   type Transport,
   type TransportStats,
 } from '@arkv/logger';
+export { FilteringTransport } from './filter-transport.js';
 export {
   BackingLogger,
+  LoggerFilters,
   LoggerModule,
   type LoggerConfigSource,
+  type LoggerFilterOptions,
   type LoggerModuleOptions,
   LoggerSettings,
+  type LoggerSettingsValue,
 } from './module.js';

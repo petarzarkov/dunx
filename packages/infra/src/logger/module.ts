@@ -9,6 +9,7 @@ import {
   type Deps,
   type DynamicModule,
   type AsyncModuleConfig,
+  type LogFilter,
   Logger,
   type OnInit,
   type OnShutdown,
@@ -17,13 +18,55 @@ import {
   RequestContext,
   token,
 } from '@dunx/core';
+import { filteredTransports } from './filter-transport.js';
+
+/**
+ * dunx's own additions to the settings, kept apart from `LoggerConfig` rather
+ * than merged into a restatement of it: everything arkv accepts stays declared
+ * in exactly one place.
+ */
+export interface LoggerFilterOptions {
+  /**
+   * Entry stages run on the way to every configured transport, in array order.
+   * The first to return `undefined` drops the entry. See {@link LogFilter}.
+   *
+   * Run **once per transport**, because each sink receives an entry of its own, so
+   * a filter with a side effect runs N times for N transports. Returns
+   * `undefined` to drop, or a replacement entry; it must not mutate what it is
+   * handed.
+   */
+  readonly filters?: readonly LogFilter[];
+}
+
+/** What a `forRoot`/`forRootAsync` config carries: arkv's settings, plus dunx's. */
+export type LoggerSettingsValue = LoggerConfig & LoggerFilterOptions;
+
+/**
+ * The settings as given, before the split into the two tokens below. Private: it
+ * is an intermediate, not something a consumer has a reason to inject.
+ */
+const LoggerSettingsInput = token<LoggerSettingsValue>('LoggerSettings');
 
 /**
  * The config `@arkv/logger` accepts, bound as a token so a factory can read it.
- * dunx does not restate it - a parallel config type is the duplication the
- * "reuse `@arkv`" rule in CLAUDE.md exists to prevent.
+ *
+ * **Exactly upstream's type.** dunx's own `filters` live under
+ * {@link LoggerFilters}, so a consumer injecting this can hand it straight to the
+ * logger with no unknown key on it, and dunx still does not restate the config -
+ * a parallel type is the duplication the "reuse `@arkv`" rule in CLAUDE.md exists
+ * to prevent.
  */
 export const LoggerSettings = token<LoggerConfig>('LoggerConfig');
+
+/** The filter stages, in order. Empty when none were configured. */
+export const LoggerFilters = token<readonly LogFilter[]>('LoggerFilters');
+
+/** The input with dunx's key removed, so the settings token stays upstream's. */
+const configOf = (raw: LoggerSettingsValue): LoggerConfig => {
+  const settings = { ...raw };
+  delete settings.filters;
+  return settings;
+};
 
 /**
  * The same instance `Logger` resolves to, typed as the implementation.
@@ -42,8 +85,8 @@ export const BackingLogger = token<ArkvLogger>('BackingLogger');
 
 /** Options, or a function returning them - possibly async. */
 export type LoggerConfigSource =
-  | LoggerConfig
-  | (() => LoggerConfig | Promise<LoggerConfig>);
+  | LoggerSettingsValue
+  | (() => LoggerSettingsValue | Promise<LoggerSettingsValue>);
 
 export interface LoggerModuleOptions {
   /**
@@ -108,6 +151,22 @@ class LoggerLifecycle implements OnInit, OnShutdown {
  */
 const surface = [Logger, RequestContext, BackingLogger];
 
+/**
+ * Splits what the caller configured into arkv's settings and dunx's filters, one
+ * token each. Both are derived from the same input, so a `forRootAsync` factory
+ * that reads config can still produce filters.
+ */
+const settingsBindings = (): readonly Registration[] => [
+  provide(LoggerSettings, {
+    useFactory: (raw: LoggerSettingsValue) => configOf(raw),
+    inject: [LoggerSettingsInput] as const,
+  }),
+  provide(LoggerFilters, {
+    useFactory: (raw: LoggerSettingsValue) => raw.filters ?? [],
+    inject: [LoggerSettingsInput] as const,
+  }),
+];
+
 const bindings = (options: LoggerModuleOptions): readonly Registration[] => [
   // Core's contract, bound to the very store this logger reads. Without it
   // @dunx/http's request logging would write a traceId into core's default
@@ -125,15 +184,33 @@ const bindings = (options: LoggerModuleOptions): readonly Registration[] => [
     // asked, and it already folds in TTY, `NO_COLOR` and `FORCE_COLOR`. The
     // consumer still wins, and this is the Bun-specific half of the fix: the
     // portable one belongs upstream (internal/notes/roadmap/arkv-integrations.md).
-    useFactory: (settings: LoggerConfig, context: ContextStore) =>
-      new ArkvLogger(
+    useFactory: (
+      settings: LoggerConfig,
+      filters: readonly LogFilter[],
+      context: ContextStore,
+    ) => {
+      const isDevelopment = settings.isDevelopment ?? Bun.enableANSIColors;
+      return new ArkvLogger(
         {
           ...settings,
-          isDevelopment: settings.isDevelopment ?? Bun.enableANSIColors,
+          isDevelopment,
+          // Only when there is something to run, so a logger with no filters hands
+          // arkv the same object it always did and keeps upstream's own default
+          // transport rather than the copy `filteredTransports` would build.
+          ...(filters.length === 0
+            ? {}
+            : {
+                transports: filteredTransports(
+                  settings,
+                  filters,
+                  isDevelopment,
+                ),
+              }),
         },
         context,
-      ),
-    inject: [LoggerSettings, ContextStore] as const,
+      );
+    },
+    inject: [LoggerSettings, LoggerFilters, ContextStore] as const,
   }),
   provide(Logger, {
     useFactory: (logger: ArkvLogger) => logger,
@@ -164,8 +241,9 @@ export class LoggerModule {
       exports: surface,
       providers: [
         typeof config === 'function'
-          ? provide(LoggerSettings, { useFactory: config })
-          : provide(LoggerSettings, { useValue: config }),
+          ? provide(LoggerSettingsInput, { useFactory: config })
+          : provide(LoggerSettingsInput, { useValue: config }),
+        ...settingsBindings(),
         ContextStore,
         ...bindings(options),
       ],
@@ -190,7 +268,7 @@ export class LoggerModule {
    * the point: eager resolution settles an async factory either way.
    */
   static forRootAsync<const D extends Deps>(
-    config: AsyncModuleConfig<LoggerConfig, D>,
+    config: AsyncModuleConfig<LoggerSettingsValue, D>,
     options: LoggerModuleOptions = {},
   ): DynamicModule {
     return {
@@ -199,7 +277,8 @@ export class LoggerModule {
       ...(config.imports === undefined ? {} : { imports: config.imports }),
       exports: surface,
       providers: [
-        provide(LoggerSettings, config),
+        provide(LoggerSettingsInput, config),
+        ...settingsBindings(),
         ContextStore,
         ...bindings(options),
       ],

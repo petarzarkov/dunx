@@ -1,5 +1,5 @@
 import { Auth } from '@dunx/auth';
-import { EventBusModule, Module } from '@dunx/core';
+import { EventBusModule, type LogFilter, Module } from '@dunx/core';
 import { OtelModule } from '@dunx/core/otel';
 import {
   ConsoleTransport,
@@ -57,6 +57,24 @@ const formatters: Record<string, LogFormatter | undefined> = {
   logfmt: logfmtFormat,
 };
 
+/**
+ * A log filter, run on the way to every transport. It covers what a key-name
+ * mask cannot: `maskFields` hides a `token` **key**, and a secret sitting in a
+ * **value** it never sees, which is what a query string carries. The request log
+ * writes the path, so `/api/notes?token=...` would otherwise reach the log file.
+ */
+const redactQuerySecrets: LogFilter = (entry) => {
+  const event = entry['event'];
+  if (typeof event !== 'string' || !event.includes('?')) return entry;
+  return {
+    ...entry,
+    event: event.replace(
+      /([?&](?:token|key|secret|code)=)[^&]*/gi,
+      '$1[REDACTED]',
+    ),
+  };
+};
+
 /** `transports` replaces the console sink, so keeping stdout means naming it. */
 const fileAndConsole = (
   path: string,
@@ -89,6 +107,9 @@ const fileAndConsole = (
           return {
             name: config.get('appName'),
             level: log.level,
+            // Before every transport, the file one included, so a secret in a
+            // logged path never reaches disk.
+            filters: [redactQuerySecrets],
             ...(log.file === undefined
               ? format === undefined
                 ? {}

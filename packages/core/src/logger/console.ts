@@ -1,9 +1,16 @@
 import type { OnShutdown } from '../di/lifecycle.js';
 import { Logger } from './logger.js';
 import type { RequestContext } from './context.js';
-import { isErrorLevel, type LogLevel, LOG_LEVELS } from './types.js';
+import { runFilters, type LogFilter } from './filter.js';
+import {
+  isErrorLevel,
+  type LogEntry,
+  type LogLevel,
+  LOG_LEVELS,
+  type SerializedError,
+} from './types.js';
 
-const serialize = (error: Error): Record<string, unknown> => ({
+const serialize = (error: Error): SerializedError => ({
   name: error.name,
   message: error.message,
   ...(error.stack === undefined ? {} : { stack: error.stack }),
@@ -80,6 +87,10 @@ const stdout = new StdoutBatch();
  * so a shipper can separate them. It does **not** sanitize, mask, rotate or
  * colour. `@dunx/infra/logger` replaces it with `@arkv/logger`, which does all
  * of that, and the swap is one import - see `packages/infra/README.md`.
+ *
+ * `filters` is the one entry hook it does carry, because it is the only one that
+ * has nowhere else to live here: a redaction, a dropped field or a rewritten
+ * message is application policy, not a property of the sink.
  */
 export class ConsoleLogger extends Logger implements OnShutdown {
   readonly #minimum: number;
@@ -89,6 +100,7 @@ export class ConsoleLogger extends Logger implements OnShutdown {
     private readonly context?: RequestContext,
     readonly logLevel: LogLevel = 'info',
     buffered = true,
+    private readonly filters: readonly LogFilter[] = [],
   ) {
     super();
     this.#minimum = LOG_LEVELS.indexOf(logLevel);
@@ -129,6 +141,21 @@ export class ConsoleLogger extends Logger implements OnShutdown {
     stdout.flush();
   }
 
+  #filterFailureReported = false;
+
+  /**
+   * `console.error` rather than an entry: this is a report about the logger, not a
+   * log line, and routing it back through the filters that just failed would be a
+   * loop.
+   */
+  #reportFilterFailure(error: unknown): void {
+    if (this.#filterFailureReported) return;
+    this.#filterFailureReported = true;
+    console.error(
+      `[dunx] a log filter threw, so its entry was dropped: ${String(error)}`,
+    );
+  }
+
   onShutdown(): void {
     stdout.flush();
   }
@@ -136,9 +163,31 @@ export class ConsoleLogger extends Logger implements OnShutdown {
   #write(level: LogLevel, message: unknown, rest: readonly unknown[]): void {
     if (LOG_LEVELS.indexOf(level) < this.#minimum) return;
 
+    // After the level check, so a filter only ever sees an entry that would have
+    // been written; before serialization, so a dropped entry costs no
+    // `JSON.stringify` and a rewritten one is what the line carries.
+    let entry: LogEntry | undefined;
+    try {
+      entry = runFilters(
+        this.#entry(level, message, rest),
+        level,
+        this.filters,
+      );
+    } catch (error) {
+      // A filter that throws drops the entry rather than writing it unfiltered,
+      // because the filters this hook exists for are redactions and the unfiltered
+      // entry is the leak. Reported once: a broken filter on a request path would
+      // otherwise write a line per request. `@dunx/infra/logger` contains the same
+      // throw in `@arkv/logger`'s transport machinery, so both agree on the
+      // outcome - entry dropped, caller not failed.
+      this.#reportFilterFailure(error);
+      return;
+    }
+    if (entry === undefined) return;
+
     // JSON.stringify, not a formatter: a cycle here would be the logger's fault,
     // and the replacement that handles cycles is one import away.
-    const line = JSON.stringify(this.#entry(level, message, rest));
+    const line = JSON.stringify(entry);
     if (!this.#buffered) {
       stdout.flush();
       if (isErrorLevel(level)) console.error(line);
@@ -157,7 +206,7 @@ export class ConsoleLogger extends Logger implements OnShutdown {
     level: LogLevel,
     message: unknown,
     rest: readonly unknown[],
-  ): Record<string, unknown> {
+  ): LogEntry {
     const only = rest[0];
     if (
       typeof message === 'string' &&

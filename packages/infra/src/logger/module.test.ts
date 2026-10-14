@@ -7,7 +7,12 @@ import {
   type Transport,
 } from '@arkv/logger';
 import { MemoryTransport } from '@arkv/logger/testing';
-import { BackingLogger, LoggerModule, LoggerSettings } from './module.js';
+import {
+  BackingLogger,
+  LoggerFilters,
+  LoggerModule,
+  LoggerSettings,
+} from './module.js';
 
 /** Captures stdout, since the logger writes through console. */
 const captured = async (run: () => Promise<void> | void): Promise<string[]> => {
@@ -481,5 +486,226 @@ describe('the backing logger', () => {
 
     // MemoryTransport keeps no counters, so it reports none rather than zeroes.
     expect(stats).toEqual([]);
+  });
+});
+
+describe('LoggerModule filters', () => {
+  /**
+   * `cardNumber`, not `password`: upstream's own `DEFAULT_MASK_FIELDS` already
+   * covers password, secret, token, cookie, authorization and the `api*` pair by
+   * key name, so an assertion on any of those would hold whether or not this
+   * filter ran at all.
+   */
+  const redactCard = (entry: Record<string, unknown>) => ({
+    ...entry,
+    cardNumber: '****',
+  });
+
+  it('runs the filter before the transport sees the entry', async () => {
+    const sink = new MemoryTransport();
+
+    @Module({
+      imports: [
+        LoggerModule.forRoot({
+          level: LogLevel.INFO,
+          isDevelopment: false,
+          transports: [sink],
+          filters: [redactCard],
+        }),
+      ],
+    })
+    class Root {}
+
+    const app = await AppFactory.create(Root);
+    app.get(Logger).info('sign-in', { cardNumber: '4111' });
+    await app.shutdown();
+
+    expect(sink.last?.['cardNumber']).toBe('****');
+  });
+
+  it('drops an entry so no transport sees it at all', async () => {
+    const sink = new MemoryTransport();
+
+    @Module({
+      imports: [
+        LoggerModule.forRoot({
+          level: LogLevel.INFO,
+          isDevelopment: false,
+          transports: [sink],
+          filters: [
+            (entry) => (entry['event'] === '/health' ? undefined : entry),
+          ],
+        }),
+      ],
+    })
+    class Root {}
+
+    const app = await AppFactory.create(Root);
+    app.get(Logger).info('probe', { event: '/health' });
+    app.get(Logger).info('kept');
+    await app.shutdown();
+
+    expect(sink.entries.map((each) => each['message'])).toEqual(['kept']);
+  });
+
+  /**
+   * Each sink receives its own entry, so the stage runs once per sink rather than
+   * once per log call. A filter with a side effect - a counter, a metric, a rate
+   * limiter - therefore runs N times for N transports, which is worth knowing
+   * before writing one that is not pure.
+   */
+  it('runs the filter once per transport', async () => {
+    let calls = 0;
+    const first = new MemoryTransport();
+    const second = new MemoryTransport();
+
+    @Module({
+      imports: [
+        LoggerModule.forRoot({
+          level: LogLevel.INFO,
+          isDevelopment: false,
+          transports: [first, second],
+          filters: [
+            (entry) => {
+              calls += 1;
+              return { ...entry, cardNumber: '****' };
+            },
+          ],
+        }),
+      ],
+    })
+    class Root {}
+
+    const app = await AppFactory.create(Root);
+    app.get(Logger).info('sign-in', { cardNumber: '4111' });
+    await app.shutdown();
+
+    expect(calls).toBe(2);
+    expect(first.last?.['cardNumber']).toBe('****');
+    expect(second.last?.['cardNumber']).toBe('****');
+  });
+
+  /**
+   * The case the config invites: `filters` with no `transports`. arkv builds its
+   * default console transport privately, so this is where dunx has to build one
+   * itself to have something to wrap.
+   */
+  it('filters the default console transport when none is configured', async () => {
+    @Module({
+      imports: [
+        LoggerModule.forRoot({
+          level: LogLevel.INFO,
+          isDevelopment: false,
+          filters: [redactCard],
+        }),
+      ],
+    })
+    class Root {}
+
+    const app = await AppFactory.create(Root);
+    const lines = await captured(() => {
+      app.get(Logger).info('sign-in', { cardNumber: '4111' });
+    });
+    await app.shutdown();
+
+    expect(JSON.parse(lines[0]!)['cardNumber']).toBe('****');
+  });
+
+  /**
+   * The other entrypoint. `examples/full` configures the logger this way, and the
+   * split into two tokens runs through the same `settingsBindings`, so a filter
+   * arriving from an async factory has to come out the far end.
+   */
+  it('applies filters configured through forRootAsync', async () => {
+    const sink = new MemoryTransport();
+
+    @Module({
+      imports: [
+        LoggerModule.forRootAsync({
+          useFactory: () => ({
+            level: LogLevel.INFO,
+            isDevelopment: false,
+            transports: [sink],
+            filters: [redactCard],
+          }),
+        }),
+      ],
+    })
+    class Root {}
+
+    const app = await AppFactory.create(Root);
+    app.get(Logger).info('sign-in', { cardNumber: '4111' });
+    await app.shutdown();
+
+    expect(sink.last?.['cardNumber']).toBe('****');
+  });
+
+  it('contains a throwing filter, dropping the entry and failing nothing', async () => {
+    const sink = new MemoryTransport();
+
+    @Module({
+      imports: [
+        LoggerModule.forRoot({
+          level: LogLevel.INFO,
+          isDevelopment: false,
+          transports: [sink],
+          filters: [
+            () => {
+              throw new Error('filter boom');
+            },
+          ],
+        }),
+      ],
+    })
+    class Root {}
+
+    const app = await AppFactory.create(Root);
+    expect(() => app.get(Logger).info('x')).not.toThrow();
+    await app.shutdown();
+
+    expect(sink.entries).toEqual([]);
+  });
+
+  it('keeps the settings token exactly what arkv accepts', async () => {
+    @Module({
+      imports: [
+        LoggerModule.forRoot({
+          level: LogLevel.INFO,
+          filters: [redactCard],
+        }),
+      ],
+    })
+    class Root {}
+
+    const app = await AppFactory.create(Root);
+    const settings = app.get(LoggerSettings);
+    const filters = app.get(LoggerFilters);
+    await app.shutdown();
+
+    // The split, not a merge: dunx's key lives on its own token, so this is
+    // upstream's config exactly and can go to the logger with nothing unknown on it.
+    expect('filters' in settings).toBe(false);
+    expect(filters).toHaveLength(1);
+  });
+
+  it('leaves the entry untouched when no filter is configured', async () => {
+    const sink = new MemoryTransport();
+
+    @Module({
+      imports: [
+        LoggerModule.forRoot({
+          level: LogLevel.INFO,
+          isDevelopment: false,
+          transports: [sink],
+        }),
+      ],
+    })
+    class Root {}
+
+    const app = await AppFactory.create(Root);
+    app.get(Logger).info('sign-in', { cardNumber: '4111' });
+    await app.shutdown();
+
+    expect(sink.last?.['cardNumber']).toBe('4111');
   });
 });
