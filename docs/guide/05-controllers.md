@@ -173,11 +173,9 @@ class ColorsController extends CrudController<Color> {
 }
 ```
 
-The filter belongs to the class, not to a constructor argument. The deprecated
-`include` and `exclude` aliases are still accepted, but `includes` and `excludes`
-take precedence when both forms are supplied. OpenAPI, the dashboard and `@dunx/mcp`
-read routes without constructing the controller, so a filter passed to `super()`
-would never reach them.
+The filter belongs to the class, not to a constructor argument. OpenAPI, the
+dashboard and `@dunx/mcp` read routes without constructing the controller, so a
+filter passed to `super()` would never reach them.
 
 A method name the class does not have fails to compile. A method that is not a
 route fails at boot. Subclasses inherit the filter, and a subclass that applies
