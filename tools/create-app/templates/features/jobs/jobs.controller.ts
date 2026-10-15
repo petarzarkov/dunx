@@ -77,9 +77,9 @@ export class JobsController {
   }
 
   /**
-   * No Redis is a degraded queue, not a broken app. bullmq surfaces the failure
-   * through ioredis, so the error shape is not guaranteed; anything unrecognised
-   * still becomes a 503.
+   * No Redis is a degraded queue, not a broken app. The failure comes up through
+   * bullmq from the `Bun.RedisClient` under it, so its shape is not guaranteed;
+   * anything unrecognised still becomes a 503.
    */
   private async degrades<T>(run: () => Promise<T>): Promise<T> {
     try {
