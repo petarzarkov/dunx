@@ -991,7 +991,7 @@ New repeatable workflow → new skill. Do not grow this file instead.
 - Do not add CommonJS output or a second/third tsconfig per package
 - Do not write a JavaScript router - `Bun.serve({ routes })` handles params, per-method
   dispatch, and method-miss 404s natively
-- Do not exceed 500 lines per source file, tests included - `max-lines` in
+- Do not exceed 500 lines per source file, 800 per test file - `max-lines` in
   `.oxlintrc.json` is an error, so `lint:check` fails rather than a reviewer noticing
 - Do not add Biome or ESLint
 - Do not prefix identifiers with `Dunx` - the brand belongs in the package name,

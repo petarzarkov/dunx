@@ -142,7 +142,7 @@
     "typecheck": "bun check"
   },
   "dependencies": {
-    "@arkv/logger": "0.13.0",
+    "@arkv/logger": "0.14.0",
     "@arkv/timezones": "0.0.2"
   },
   "devDependencies": {

@@ -276,7 +276,7 @@
         "dunx-email": "dist/email/cli.js",
       },
       "dependencies": {
-        "@arkv/logger": "0.13.0",
+        "@arkv/logger": "0.14.0",
         "@arkv/timezones": "0.0.2",
       },
       "devDependencies": {
@@ -426,7 +426,7 @@
 
     "@arkv/colors": ["@arkv/colors@0.8.0", "", {}, "sha512-r4xt9tTUpeEgfOnKfVfdvP1QMgX4aMQtK1z12sGbB85hEqH6ijBiugZbKAo7HqfCaHtIXycX3diptQL+OfcimA=="],
 
-    "@arkv/logger": ["@arkv/logger@0.13.0", "", { "dependencies": { "@arkv/colors": "^0.8.0", "@arkv/shared": "^0.8.0" } }, "sha512-iRwp2nxr4VYj0zoZvFzJ1eSSUdtk/NRIRyxar48oJf8GIIrk592ATxoOInaTyAMo/vKjoBWZjIW485DeQ+VtEA=="],
+    "@arkv/logger": ["@arkv/logger@0.14.0", "", { "dependencies": { "@arkv/colors": "^0.8.0", "@arkv/shared": "^0.8.0" } }, "sha512-vsINPFkZK3HJar0zqDOduRBPkd14LUOapHR29X1QuD6LEeipWUOEK+tNkPHq0ZduIgMYocJmrcWw8CMPHMSUaQ=="],
 
     "@arkv/shared": ["@arkv/shared@0.8.0", "", {}, "sha512-c9YTix/b35KTEmIl+qlyjm74SzqWEXXcvwr4rqhYPWr7ihirdSaydOFFNFQSyQYgefVOc4JEKdpb4gOhSsKcrA=="],
 

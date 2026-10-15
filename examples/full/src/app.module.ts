@@ -17,6 +17,7 @@ import { ChatModule } from './chat/chat.module.js';
 import { CrudModule } from './crud/crud.module.js';
 import { ProtocolsModule } from './protocols/protocols.module.js';
 import { AppConfigService, configModule } from './config.js';
+import { maskEmails } from './log-filters.js';
 import { OpsModule } from './dashboard/dashboard.module.js';
 import { StatsModule } from './stats/stats.module.js';
 import { DatabaseModule } from './database/database.module.js';
@@ -89,6 +90,7 @@ const fileAndConsole = (
           return {
             name: config.get('appName'),
             level: log.level,
+            filters: [maskEmails],
             ...(log.file === undefined
               ? format === undefined
                 ? {}
