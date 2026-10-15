@@ -6,11 +6,22 @@ that returns a promise: an outbound call, a driver query, a broker publish.
 
 There is no circuit breaker, bulkhead or rate limiter. For related needs:
 
-| Need                                     | Use                                                     |
-| ---------------------------------------- | ------------------------------------------------------- |
-| Limit incoming requests per caller       | `ThrottleModule` in `@dunx/http`, with a shared store   |
-| Retry background work this process owns  | bullmq, through `@dunx/infra/queue`                     |
-| Accept a client's retried request safely | `@Idempotent()`, see [Idempotency](./33-idempotency.md) |
+| Need                                     | Use                                                                           |
+| ---------------------------------------- | ----------------------------------------------------------------------------- |
+| Limit incoming requests per caller       | `ThrottleModule` in `@dunx/http`, with a shared store                         |
+| Retry background work this process owns  | bullmq, through `@dunx/infra/queue`                                           |
+| Accept a client's retried request safely | `@Idempotent()`, see [Idempotency](./33-idempotency.md)                       |
+| Bound a slow route handler               | `timeoutMs` and `retry` on the calls it makes, and `signal: input.req.signal` |
+
+A route handler is not wrapped in a policy:
+
+- Its body is read once, so a second attempt would find it consumed.
+- A retry would run the guards and every side effect again.
+- A timeout only stops work that takes a signal, and a handler is not given one.
+
+The slow part is a call the handler makes, so the budget goes there.
+`HttpService` takes `timeoutMs`, `retry` and `signal` per call, and
+`input.req.signal` aborts when the client hangs up.
 
 ## Binding a policy
 
