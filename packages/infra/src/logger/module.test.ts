@@ -3,6 +3,7 @@ import { AppFactory, Logger, LOG_LEVELS, LogLevel, Module } from '@dunx/core';
 import {
   ContextStore,
   LOG_LEVELS as BACKING_LOG_LEVELS,
+  type LogFilter,
   LogLevel as BackingLogLevel,
   type Transport,
 } from '@arkv/logger';
@@ -323,6 +324,29 @@ describe('LoggerModule', () => {
 
     expect(memory.last?.['module']).toBe('users');
     expect(memory.last?.['message']).toBe('created');
+  });
+
+  // `filters` is upstream's option; dunx's part is only not losing it on the way.
+  it('hands `filters` to the backing logger, from a factory too', async () => {
+    const memory = new MemoryTransport();
+    const dropHealth: LogFilter = (entry) =>
+      entry['path'] === '/health' ? undefined : entry;
+
+    @Module({
+      imports: [
+        LoggerModule.forRoot(async () => ({
+          transports: [memory],
+          filters: [dropHealth],
+        })),
+      ],
+    })
+    class Root {}
+
+    const app = await AppFactory.create(Root);
+    app.get(Logger).info('request', { path: '/health' });
+    app.get(Logger).info('request', { path: '/orders' });
+
+    expect(memory.entries.map((entry) => entry['path'])).toEqual(['/orders']);
   });
 
   it('flushes and closes transports on app shutdown', async () => {

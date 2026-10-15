@@ -335,6 +335,45 @@ reads.
 takes a machine format even when the console does not, since nothing reads a log
 file with its eyes first.
 
+### Redacting, rewriting and dropping entries
+
+All four are `LoggerConfig` options, passed through `forRoot` unchanged:
+
+| Option         | Acts on                                 | For                                                                                        |
+| -------------- | --------------------------------------- | ------------------------------------------------------------------------------------------ |
+| `maskFields`   | a key name, at any depth, ignoring case | `ssn`, `iban`. Added to the defaults (`password`, `token`, `authorization`, `cookie`, ...) |
+| `serializers`  | one top-level field, by name            | turning `req` into `{ method, url }`                                                       |
+| `filterEvents` | the context's `event`, exact match      | silencing a route before its entry is built                                                |
+| `filters`      | the whole entry                         | a secret inside a value, a rule across fields, any other drop                              |
+
+A filter returns the entry, or a replacement, to keep it and `undefined` to drop
+it. `message` is reserved, so no serializer can reach it; a filter can:
+
+```ts
+import { type LogFilter, LoggerModule } from '@dunx/infra/logger';
+
+const maskEmails: LogFilter = (entry) => {
+  const message = entry['message'];
+  return typeof message === 'string' && message.includes('@')
+    ? { ...entry, message: message.replace(/[\w.+-]+@([\w-]+\.)/g, '***@$1') }
+    : entry;
+};
+
+LoggerModule.forRoot({ name: 'my-api', filters: [maskEmails] });
+```
+
+- Filters run in order, once per entry, before any transport, so the default
+  console sink is covered too.
+- They run before masking. `maskFields` still applies to what a filter returns,
+  and a dropped entry skips the sanitize walk.
+- `error` is already a plain object by then: compare `entry.error?.name`, not
+  `instanceof`.
+- A filter that throws drops its entry rather than writing it unfiltered. The
+  first failure per logger is reported on stderr.
+
+The request log writes `event` as the path without its query string, so a token
+in a query does not reach the log from there.
+
 ### `captureGlobalErrors`
 
 ```ts

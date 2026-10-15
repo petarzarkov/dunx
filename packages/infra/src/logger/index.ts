@@ -30,6 +30,7 @@ export {
   HttpTransport,
   type HttpTransportOptions,
   jsonFormat,
+  type LogFilter,
   logfmtFormat,
   type LogFormatter,
   type LoggerConfig,
