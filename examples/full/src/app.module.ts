@@ -5,7 +5,6 @@ import {
   ConsoleTransport,
   FileTransport,
   jsonFormat,
-  type LogFilter,
   logfmtFormat,
   type LogFormatter,
   LoggerModule,
@@ -18,6 +17,7 @@ import { ChatModule } from './chat/chat.module.js';
 import { CrudModule } from './crud/crud.module.js';
 import { ProtocolsModule } from './protocols/protocols.module.js';
 import { AppConfigService, configModule } from './config.js';
+import { maskEmails } from './log-filters.js';
 import { OpsModule } from './dashboard/dashboard.module.js';
 import { StatsModule } from './stats/stats.module.js';
 import { DatabaseModule } from './database/database.module.js';
@@ -56,18 +56,6 @@ const formatters: Record<string, LogFormatter | undefined> = {
   json: undefined,
   text: textFormat,
   logfmt: logfmtFormat,
-};
-
-/**
- * `message` is reserved, so no serializer reaches it, and `maskFields` matches
- * keys, not text. A filter sees the whole entry: this one keeps an address's
- * domain and hides the mailbox, on the way to every transport.
- */
-const maskEmails: LogFilter = (entry) => {
-  const message = entry['message'];
-  return typeof message === 'string' && message.includes('@')
-    ? { ...entry, message: message.replace(/[\w.+-]+@([\w-]+\.)/g, '***@$1') }
-    : entry;
 };
 
 /** `transports` replaces the console sink, so keeping stdout means naming it. */

@@ -352,15 +352,20 @@ it. `message` is reserved, so no serializer can reach it; a filter can:
 ```ts
 import { type LogFilter, LoggerModule } from '@dunx/infra/logger';
 
+// A letters-only TLD keeps `v2@3.1` out; `u` lets `\p{L}` match `josé`.
+const EMAIL = /[\p{L}\p{N}._%+-]+@((?:[\p{L}\p{N}-]+\.)+\p{L}{2,})/gu;
+
 const maskEmails: LogFilter = (entry) => {
   const message = entry['message'];
   return typeof message === 'string' && message.includes('@')
-    ? { ...entry, message: message.replace(/[\w.+-]+@([\w-]+\.)/g, '***@$1') }
+    ? { ...entry, message: message.replace(EMAIL, '***@$1') }
     : entry;
 };
 
 LoggerModule.forRoot({ name: 'my-api', filters: [maskEmails] });
 ```
+
+A filter runs on every entry, so build its pattern once, outside the function.
 
 - Filters run in order, once per entry, before any transport, so the default
   console sink is covered too.
