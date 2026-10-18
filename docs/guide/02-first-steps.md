@@ -183,7 +183,7 @@ using it in a `Bun.build` production build, see
     "dev": "bun --watch src/main.ts",
     "start": "bun src/main.ts",
     "test": "bun test",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "bun check"
   },
   "dependencies": {
     "@dunx/core": "^0.1.0",
@@ -192,8 +192,7 @@ using it in a `Bun.build` production build, see
   },
   "devDependencies": {
     "@dunx/testing": "^0.1.0",
-    "@types/bun": ">=1.4.3",
-    "typescript": "^5.7.0"
+    "@types/bun": ">=1.4.3"
   },
   "engines": {
     "bun": ">=1.4.3"

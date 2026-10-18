@@ -199,7 +199,7 @@ const readStarter = async (): Promise<Starter> => {
     runtime: `bun ${bun}`,
     dependencies: Object.keys(manifest.dependencies ?? {}),
     // The toolchain is not in the example's manifest - the workspace root supplies
-    // it there - and `tsc --noEmit` needs it here.
+    // it there - and `bun check` needs it here.
     devDependencies: [
       ...Object.keys(manifest.devDependencies ?? {}),
       ...Object.keys(DEV_TOOLCHAIN),

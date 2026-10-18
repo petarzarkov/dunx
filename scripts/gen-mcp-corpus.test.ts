@@ -137,7 +137,7 @@ describe('the bundled corpus', () => {
       devDependencies?: Record<string, string>;
     };
     expect(manifest.type).toBe('module');
-    expect(manifest.scripts?.['typecheck']).toBe('tsc --noEmit');
+    expect(manifest.scripts?.['typecheck']).toBe('bun check');
 
     // No `workspace:*` survives: the example resolves those from this repo and a
     // consumer installing one gets an unresolvable specifier.
@@ -204,7 +204,7 @@ describe('the bundled corpus', () => {
 
   /**
    * The base `tsconfig.json` declares `types: ["bun"]`, so a starter without
-   * `@types/bun` fails its first `tsc --noEmit` with TS2688. It did, and the
+   * `@types/bun` fails its first `bun check` with TS2688. It did, and the
    * example's own manifest cannot say so - the workspace root supplies it there.
    */
   it('gives the starter the toolchain its tsconfig needs', async () => {

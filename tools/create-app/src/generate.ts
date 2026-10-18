@@ -27,13 +27,13 @@ const DUNX = /^@dunx\//;
 
 /**
  * The toolchain every generated app needs, exported because
- * `scripts/gen-mcp-corpus.ts` puts the same two in `@dunx/mcp`'s starter manifest.
+ * `scripts/gen-mcp-corpus.ts` puts the same in `@dunx/mcp`'s starter manifest.
  * The base `tsconfig.json` declares `types: ["bun"]`, so a starter without
- * `@types/bun` fails its first `tsc --noEmit` with TS2688.
+ * `@types/bun` fails its first `bun check` with TS2688. `bun check` carries its
+ * own TypeScript, so there is no `typescript` to install.
  */
 export const DEV_TOOLCHAIN: Readonly<Record<string, string>> = Object.freeze({
   '@types/bun': '>=1.4.3',
-  typescript: '^5.7.0',
 });
 
 export const manifest = (
@@ -55,7 +55,7 @@ export const manifest = (
     // `scripts/build.ts` compiles this app to one standalone executable.
     ...(binary ? { build: 'bun scripts/build.ts' } : {}),
     test: 'bun test',
-    typecheck: 'tsc --noEmit',
+    typecheck: 'bun check',
   };
 
   return `${JSON.stringify(

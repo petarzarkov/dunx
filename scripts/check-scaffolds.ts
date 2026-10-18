@@ -57,19 +57,19 @@ for (const [at, features] of SELECTIONS.entries()) {
       version: 'workspace:*',
     });
 
-    const tsc = Bun.spawnSync(['bunx', 'tsc', '--noEmit', '--skipLibCheck'], {
+    const check = Bun.spawnSync(['bun', 'check'], {
       cwd: result.directory,
       stdout: 'pipe',
       stderr: 'pipe',
     });
 
-    if (tsc.exitCode === 0) {
+    if (check.exitCode === 0) {
       console.log(`  ok  ${label(features)} (${result.files.length} files)`);
     } else {
       failed += 1;
       console.error(`fail  ${label(features)}`);
-      console.error(tsc.stdout.toString().trimEnd());
-      console.error(tsc.stderr.toString().trimEnd());
+      console.error(check.stdout.toString().trimEnd());
+      console.error(check.stderr.toString().trimEnd());
     }
   } finally {
     await rm(dir, { recursive: true, force: true });

@@ -7,7 +7,7 @@
     "dev": "bun --watch src/main.ts",
     "start": "bun src/main.ts",
     "test": "bun test",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "bun check"
   },
   "dependencies": {
     "@dunx/core": "__DUNX_VERSION__",
@@ -16,8 +16,7 @@
   },
   "devDependencies": {
     "@dunx/testing": "__DUNX_VERSION__",
-    "@types/bun": ">=1.4.3",
-    "typescript": "^5.7.0"
+    "@types/bun": ">=1.4.3"
   },
   "engines": {
     "bun": ">=1.4.3"
