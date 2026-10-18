@@ -46,8 +46,7 @@ the other shows which of it needs Redis or Postgres running to do anything.
 After the list, you are asked whether to compile the app to one standalone binary.
 Yes adds `scripts/build.ts` and a `build` script. `bun run build` then uses
 `bun build --compile` to write one executable that runs on a host with nothing
-installed. This needs Bun >= 1.4.1, which the generated `package.json` already
-requires.
+installed.
 
 Three more questions appear only when there is something to ask: a directory, when
 the command line named none; a package name, when the directory's is one npm would

@@ -109,15 +109,7 @@ const encodable = (encoding: CompressionEncoding): boolean => {
   } catch {
     return false;
   }
-  if (encoding !== CompressionEncoding.BR) return true;
-  // 1.4.3 started validating `level` in the release that started applying it, so
-  // an out-of-range one throwing is what says the quality above is honoured.
-  try {
-    new CompressionStream('brotli', { level: 12 });
-    return false;
-  } catch {
-    return true;
-  }
+  return true;
 };
 
 export interface CompressionOptionsInit {
@@ -131,7 +123,7 @@ export interface CompressionOptionsInit {
    * `br` follows for a client without zstd, which is Safari, sending it 45% fewer
    * bytes than gzip would.
    *
-   * @default ['zstd', 'br', 'gzip'], without `br` on a Bun older than 1.4.3
+   * @default ['zstd', 'br', 'gzip']
    */
   readonly encodings?: readonly CompressionEncoding[];
   /**
@@ -158,15 +150,11 @@ export class CompressionOptions {
   readonly filter: (contentType: string | null) => boolean;
 
   constructor(init: CompressionOptionsInit = {}) {
-    // The default drops what this runtime cannot encode; a list the app wrote is
-    // held to every entry.
-    this.encodings =
-      init.encodings ??
-      [
-        CompressionEncoding.ZSTD,
-        CompressionEncoding.BR,
-        CompressionEncoding.GZIP,
-      ].filter(encodable);
+    this.encodings = init.encodings ?? [
+      CompressionEncoding.ZSTD,
+      CompressionEncoding.BR,
+      CompressionEncoding.GZIP,
+    ];
     // `engines.bun` is not enforced by `bun install`, so a runtime missing an
     // encoder can still boot this. Checked once here so it is a boot error
     // naming the coding, rather than a TypeError on the first request that

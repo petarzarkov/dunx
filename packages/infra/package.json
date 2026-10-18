@@ -162,7 +162,7 @@
   "peerDependencies": {
     "@dunx/core": "workspace:*",
     "@react-email/render": "^2.0.0",
-    "@types/bun": ">=1.4.1",
+    "@types/bun": ">=1.4.3",
     "bullmq": "^6.0.5",
     "drizzle-orm": "^0.45.2",
     "ioredis": ">=5.0.0",
@@ -201,6 +201,6 @@
     }
   },
   "engines": {
-    "bun": ">=1.4.1"
+    "bun": ">=1.4.3"
   }
 }

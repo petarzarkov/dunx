@@ -188,7 +188,7 @@ const readStarter = async (): Promise<Starter> => {
   const own = (await Bun.file(join(ROOT, 'tools/mcp/package.json')).json()) as {
     engines?: Record<string, string>;
   };
-  const bun = own.engines?.['bun'] ?? '>=1.4.1';
+  const bun = own.engines?.['bun'] ?? '>=1.4.3';
 
   files.unshift({
     path: 'package.json',
@@ -199,7 +199,7 @@ const readStarter = async (): Promise<Starter> => {
     runtime: `bun ${bun}`,
     dependencies: Object.keys(manifest.dependencies ?? {}),
     // The toolchain is not in the example's manifest - the workspace root supplies
-    // it there - and `tsc --noEmit` needs it here.
+    // it there - and `bun check` needs it here.
     devDependencies: [
       ...Object.keys(manifest.devDependencies ?? {}),
       ...Object.keys(DEV_TOOLCHAIN),

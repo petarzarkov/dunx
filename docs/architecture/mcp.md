@@ -221,11 +221,11 @@ before `bun run version`, so an inlined version is a release behind too.
 `Scaffold.starter()` substitutes at request time from `ownVersion()`, one
 `readFileSync` of the package's own manifest, which npm publishes already bumped.
 
-`@types/bun` and typescript come from `DEV_TOOLCHAIN` in
-`tools/create-app/src/generate.ts`, which `manifest()` spreads into every generated
-app. Without them the base `tsconfig.json`'s `types: ["bun"]` fails the starter's
-first `tsc --noEmit` with TS2688, measured against the published 3.5.0 in a clean
-directory.
+`@types/bun` comes from `DEV_TOOLCHAIN` in `tools/create-app/src/generate.ts`,
+which `manifest()` spreads into every generated app. Without it the base
+`tsconfig.json`'s `types: ["bun"]` fails the starter's first typecheck with TS2688,
+measured against the published 3.5.0 in a clean directory. `bun check` needs no
+`typescript` package, so the toolchain is that one entry.
 
 ### Resources, and the note that said to take the SDK
 

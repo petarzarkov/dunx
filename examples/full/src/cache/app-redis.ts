@@ -5,7 +5,7 @@ import { AppConfigService } from '../config.js';
  * Its own file because three modules name it, and a dynamic module is its own
  * scope keyed on the reference: calling `forRootAsync` again opens a second
  * connection. No url, so Bun resolves $VALKEY_URL, $REDIS_URL, then localhost.
- * `maxRetries: 0` because a failed connect with retries outlives `close()`.
+ * `maxRetries: 0` so an absent server fails at once, not after ~31s of backoff.
  */
 export const appRedis = RedisModule.forRootAsync(
   {

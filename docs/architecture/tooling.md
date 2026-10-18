@@ -171,7 +171,7 @@ bunx @dunx/create-app my-app
 ```
 
 It runs on Bun, not Node: the bin starts with `#!/usr/bin/env bun` and `engines`
-requires `bun >=1.4.1`. It has zero dependencies, keeps its templates as
+requires `bun >=1.4.3`. It has zero dependencies, keeps its templates as
 directories under `templates/` with token replacement, and makes no network
 request.
 

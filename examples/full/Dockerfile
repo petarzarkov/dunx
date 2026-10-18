@@ -16,7 +16,7 @@
 # what keeps the thumbnail queue working.
 
 # ---- build: install the workspace and emit each package's dist -------------
-FROM oven/bun:1.4.2-slim AS build
+FROM oven/bun:1.4.3-slim AS build
 WORKDIR /app
 
 # The whole workspace. A `--frozen-lockfile` install reads every workspace named
@@ -54,7 +54,7 @@ RUN bun run --filter '@dunx/core' build \
   && bun run --filter '@dunx/dashboard' build
 
 # ---- runtime ---------------------------------------------------------------
-FROM oven/bun:1.4.2-slim AS runtime
+FROM oven/bun:1.4.3-slim AS runtime
 WORKDIR /app
 
 # curl for the healthcheck below, and nothing else.

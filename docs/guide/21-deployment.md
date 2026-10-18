@@ -161,7 +161,7 @@ of the browser-facing headers, and `csrf` with `trustProxy` if the proxy rewrite
 ## Container image
 
 ```dockerfile
-FROM oven/bun:1.4.2-alpine
+FROM oven/bun:1.4.3-alpine
 WORKDIR /app
 
 # Dependencies first, so a source change does not reinstall them.

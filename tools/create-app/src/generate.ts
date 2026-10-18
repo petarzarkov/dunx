@@ -27,13 +27,13 @@ const DUNX = /^@dunx\//;
 
 /**
  * The toolchain every generated app needs, exported because
- * `scripts/gen-mcp-corpus.ts` puts the same two in `@dunx/mcp`'s starter manifest.
+ * `scripts/gen-mcp-corpus.ts` puts the same in `@dunx/mcp`'s starter manifest.
  * The base `tsconfig.json` declares `types: ["bun"]`, so a starter without
- * `@types/bun` fails its first `tsc --noEmit` with TS2688.
+ * `@types/bun` fails its first `bun check` with TS2688. `bun check` carries its
+ * own TypeScript, so there is no `typescript` to install.
  */
 export const DEV_TOOLCHAIN: Readonly<Record<string, string>> = Object.freeze({
-  '@types/bun': '>=1.4.1',
-  typescript: '^5.7.0',
+  '@types/bun': '>=1.4.3',
 });
 
 export const manifest = (
@@ -55,7 +55,7 @@ export const manifest = (
     // `scripts/build.ts` compiles this app to one standalone executable.
     ...(binary ? { build: 'bun scripts/build.ts' } : {}),
     test: 'bun test',
-    typecheck: 'tsc --noEmit',
+    typecheck: 'bun check',
   };
 
   return `${JSON.stringify(
@@ -70,7 +70,7 @@ export const manifest = (
         '@dunx/testing': '__DUNX_VERSION__',
         ...DEV_TOOLCHAIN,
       },
-      engines: { bun: '>=1.4.1' },
+      engines: { bun: '>=1.4.3' },
     },
     null,
     2,
@@ -380,9 +380,8 @@ bun run build   # -> dist/${bin} (the Bun runtime plus the app, one file)
 
 \`scripts/build.ts\` hands \`Bun.build\` the \`@dunx/transform\` plugin and \`compile\`
 together, so the constructor-dependency records the container needs are baked into
-the executable. This needs Bun >= 1.4.1, the version \`package.json\` already
-requires: an earlier one dropped the records. Copy \`dist/${bin}\` to a host and run
-it; it needs nothing installed.
+the executable. Copy \`dist/${bin}\` to a host and run it; it needs nothing
+installed.
 
 Run it from a directory without this app's \`bunfig.toml\`. A standalone bun
 executable still reads \`preload\` from the working directory's bunfig and would try

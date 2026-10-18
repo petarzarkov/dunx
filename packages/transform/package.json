@@ -56,7 +56,7 @@
     "oxc-parser": "0.142.0"
   },
   "peerDependencies": {
-    "@types/bun": ">=1.4.1",
+    "@types/bun": ">=1.4.3",
     "typescript": ">=5.0.0"
   },
   "peerDependenciesMeta": {
@@ -68,6 +68,6 @@
     }
   },
   "engines": {
-    "bun": ">=1.4.1"
+    "bun": ">=1.4.3"
   }
 }

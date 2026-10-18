@@ -23,9 +23,7 @@ export class TelemetryGateway {
     // configured one narrows it here. A Blob is the one that needs an await.
     const blob = message as unknown as Blob;
     const bytes = new Uint8Array(await blob.arrayBuffer());
-    // Not `+=`: Bun refuses to parse a read-modify-write on a private field in a
-    // class that has a decorated member. See docs/bun-apis.md.
-    this.#recorded = this.#recorded + bytes.length;
+    this.#recorded += bytes.length;
 
     return (
       `${blob.constructor.name}(${blob.size}) -> ` +

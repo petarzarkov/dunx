@@ -53,7 +53,7 @@
   "peerDependencies": {
     "@dunx/core": "workspace:*",
     "@dunx/http": "workspace:*",
-    "@types/bun": ">=1.4.1"
+    "@types/bun": ">=1.4.3"
   },
   "peerDependenciesMeta": {
     "@types/bun": {
@@ -61,6 +61,6 @@
     }
   },
   "engines": {
-    "bun": ">=1.4.1"
+    "bun": ">=1.4.3"
   }
 }

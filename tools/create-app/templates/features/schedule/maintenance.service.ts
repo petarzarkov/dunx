@@ -1,18 +1,14 @@
-import { Counter, Gauge, Logger } from '@dunx/core';
+import { Logger } from '@dunx/core';
 import { Cron, Interval, OnceOnBoot, Overlap } from '@dunx/infra/schedule';
 
 /**
  * The three schedule decorators on one class, discovered off the prototype chain
  * with no second registration. Nothing here coordinates across replicas: work
  * that must happen once per fleet is a `@JobHandler`.
- *
- * Counts go through `@dunx/core`'s `Counter` rather than a private field, which
- * also sidesteps Bun 1.4.0 failing to parse a class with both a decorated member
- * and a read-modify-write on a private field. See docs/bun-apis.md.
  */
 export class Maintenance {
-  readonly #sweeps = new Counter();
-  readonly #compactions = new Counter();
+  #sweeps = 0;
+  #compactions = 0;
   #warmed = false;
 
   constructor(private readonly logger: Logger) {}
@@ -28,8 +24,7 @@ export class Maintenance {
   /** Ten minutes, so it never fires during a tour. `trigger` runs it now. */
   @Interval(600_000, { name: 'maintenance.sweep' })
   sweepSessions(): number {
-    this.#sweeps.inc();
-    return this.#sweeps.value;
+    return ++this.#sweeps;
   }
 
   /**
@@ -39,19 +34,12 @@ export class Maintenance {
   @Cron('0 3 * * *', { name: 'maintenance.compact' })
   async compactLedger(): Promise<number> {
     await Bun.sleep(1);
-    this.#compactions.inc();
-    return this.#compactions.value;
+    return ++this.#compactions;
   }
 
-  readonly #slow = new Counter();
-  /**
-   * A `Gauge`, not `#inFlight += 1`. A compound assignment to a private field in
-   * a class that also has a decorated member is a `SyntaxError` in Bun's parser,
-   * still on 1.4.2 - which is what the note at the top of this class is about,
-   * and which this method walked straight into before it was written this way.
-   */
-  readonly #inFlight = new Gauge();
-  readonly #peak = new Gauge();
+  #slow = 0;
+  #inFlight = 0;
+  #peak = 0;
 
   /**
    * `overlap: Overlap.CONCURRENT`, which is the half `skip` hides.
@@ -66,25 +54,23 @@ export class Maintenance {
     overlap: Overlap.CONCURRENT,
   })
   async overlappingWork(): Promise<number> {
-    this.#inFlight.inc();
-    this.#peak.set(Math.max(this.#peak.value, this.#inFlight.value));
+    this.#peak = Math.max(this.#peak, ++this.#inFlight);
     try {
       await Bun.sleep(40);
-      this.#slow.inc();
-      return this.#slow.value;
+      return ++this.#slow;
     } finally {
-      this.#inFlight.dec();
+      this.#inFlight -= 1;
     }
   }
 
   get overlapping(): { runs: number; maxInFlight: number } {
-    return { runs: this.#slow.value, maxInFlight: this.#peak.value };
+    return { runs: this.#slow, maxInFlight: this.#peak };
   }
 
   get counts(): { sweeps: number; compactions: number; warmed: boolean } {
     return {
-      sweeps: this.#sweeps.value,
-      compactions: this.#compactions.value,
+      sweeps: this.#sweeps,
+      compactions: this.#compactions,
       warmed: this.#warmed,
     };
   }

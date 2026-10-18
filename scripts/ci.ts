@@ -63,11 +63,6 @@ export const PHASES: readonly Phase[] = Object.freeze([
     summary: 'The documentation site suite',
     concurrent: false,
     steps: [
-      // No `--parallel` here, and it is not an oversight: a worker resolves an
-      // `import x from './y.json?raw'` as a JSON module rather than as text, so
-      // `src/data.ts` throws and 8 of the 12 files bail. Measured on Bun 1.4.0
-      // and still reproducing on 1.4.1, recorded in docs/bun-apis.md.
-      // `src/symbol-anchor.test.tsx` is 13.1s of this phase's 17.4s on its own.
       { name: 'test', run: ['bun', 'run', '--filter', '@dunx/docs', 'test'] },
     ],
   },

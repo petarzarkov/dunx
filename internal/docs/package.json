@@ -10,7 +10,7 @@
     "generate": "bun ./scripts/generate.ts",
     "gen:og": "bun ./scripts/og-card.ts",
     "preview": "vite preview",
-    "test": "bun test src scripts --bail --timeout 20000",
+    "test": "bun test src scripts --parallel --bail --timeout 20000",
     "typecheck": "bun run generate --if-missing && bun check",
     "shots": "bun run build && bun run test:browser",
     "test:browser": "cd browser && bun test --timeout 60000"

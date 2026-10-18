@@ -328,10 +328,9 @@ describe.if(live)('shutdown', () => {
 
   /**
    * A subprocess, because `bun test` exits the runner itself and would therefore
-   * never notice: measured on Bun 1.3.14, a `Bun.RedisClient` left in subscriber
-   * mode keeps the event loop alive after `close()`, so a service that shut down
-   * cleanly still hung forever. `onShutdown` leaves subscriber mode first, and
-   * this is what proves it - without the `unsubscribe()` the spawn times out.
+   * never notice. Through Bun 1.4.2 a `Bun.RedisClient` left in subscriber mode
+   * kept the event loop alive after `close()`, so a service that shut down
+   * cleanly still hung forever.
    */
   it('lets the process exit after a subscription was opened', async () => {
     const source = new URL('./', import.meta.url).pathname;
