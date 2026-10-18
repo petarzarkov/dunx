@@ -188,7 +188,7 @@ const readStarter = async (): Promise<Starter> => {
   const own = (await Bun.file(join(ROOT, 'tools/mcp/package.json')).json()) as {
     engines?: Record<string, string>;
   };
-  const bun = own.engines?.['bun'] ?? '>=1.4.1';
+  const bun = own.engines?.['bun'] ?? '>=1.4.3';
 
   files.unshift({
     path: 'package.json',

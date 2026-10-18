@@ -188,7 +188,7 @@ describe('the guide reader', () => {
 
 describe('the scaffold reader', () => {
   const starter: Starter = {
-    runtime: 'bun >=1.4.1',
+    runtime: 'bun >=1.4.3',
     dependencies: ['@dunx/core'],
     devDependencies: ['@dunx/testing'],
     files: [{ path: 'src/main.ts', body: 'export {};' }],

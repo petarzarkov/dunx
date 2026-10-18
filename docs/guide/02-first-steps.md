@@ -1,7 +1,7 @@
 # First steps
 
 You will scaffold an app, walk through each file, then add a route, a service
-and a test. You need Bun 1.4 or newer.
+and a test. You need Bun 1.4.3 or newer.
 
 ## Scaffold
 
@@ -192,11 +192,11 @@ using it in a `Bun.build` production build, see
   },
   "devDependencies": {
     "@dunx/testing": "^0.1.0",
-    "@types/bun": ">=1.4.0",
+    "@types/bun": ">=1.4.3",
     "typescript": "^5.7.0"
   },
   "engines": {
-    "bun": ">=1.4.0"
+    "bun": ">=1.4.3"
   }
 }
 ```

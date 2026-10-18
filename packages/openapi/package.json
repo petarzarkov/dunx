@@ -68,7 +68,7 @@
     "@dunx/core": "workspace:*",
     "@dunx/http": "workspace:*",
     "@scalar/api-reference": "^1.68.0",
-    "@types/bun": ">=1.4.1",
+    "@types/bun": ">=1.4.3",
     "swagger-ui-dist": "^5.32.14",
     "zod": "^4"
   },
@@ -87,6 +87,6 @@
     }
   },
   "engines": {
-    "bun": ">=1.4.1"
+    "bun": ">=1.4.3"
   }
 }

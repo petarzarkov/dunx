@@ -32,7 +32,7 @@ const DUNX = /^@dunx\//;
  * `@types/bun` fails its first `tsc --noEmit` with TS2688.
  */
 export const DEV_TOOLCHAIN: Readonly<Record<string, string>> = Object.freeze({
-  '@types/bun': '>=1.4.1',
+  '@types/bun': '>=1.4.3',
   typescript: '^5.7.0',
 });
 
@@ -70,7 +70,7 @@ export const manifest = (
         '@dunx/testing': '__DUNX_VERSION__',
         ...DEV_TOOLCHAIN,
       },
-      engines: { bun: '>=1.4.1' },
+      engines: { bun: '>=1.4.3' },
     },
     null,
     2,
@@ -380,9 +380,8 @@ bun run build   # -> dist/${bin} (the Bun runtime plus the app, one file)
 
 \`scripts/build.ts\` hands \`Bun.build\` the \`@dunx/transform\` plugin and \`compile\`
 together, so the constructor-dependency records the container needs are baked into
-the executable. This needs Bun >= 1.4.1, the version \`package.json\` already
-requires: an earlier one dropped the records. Copy \`dist/${bin}\` to a host and run
-it; it needs nothing installed.
+the executable. Copy \`dist/${bin}\` to a host and run it; it needs nothing
+installed.
 
 Run it from a directory without this app's \`bunfig.toml\`. A standalone bun
 executable still reads \`preload\` from the working directory's bunfig and would try
