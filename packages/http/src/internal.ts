@@ -25,6 +25,7 @@ export {
   type RouteNode,
 } from './inspect.js';
 export { buildContext } from './server/context.js';
+export { pathnameOf, searchOf } from './server/url.js';
 export { boundedProbe } from './health/registry.js';
 export { IMMUTABLE_CACHE_CONTROL } from './static/files.js';
 export { embedJson } from './server/html.js';

@@ -16,7 +16,7 @@ import {
   VERSION_NEUTRAL,
   type RouteSchemas,
 } from '@dunx/http';
-import { joinPath } from '@dunx/http/internal';
+import { joinPath, pathnameOf, searchOf } from '@dunx/http/internal';
 import { OpenApiExplorer } from './explorer.js';
 import { mountPrefix } from './mount.js';
 import type { DocsRenderer } from './renderer.js';
@@ -87,7 +87,7 @@ const documentController = (mount: DocMount) => {
      * a document of its own. One the explorer has no document for is a 404.
      */
     protected version(input: Input<RouteSchemas>): string | undefined {
-      const asked = new URL(input.req.url).searchParams.get('version');
+      const asked = new URLSearchParams(searchOf(input.req.url)).get('version');
       if (asked === null) return undefined;
       if (!this.explorer.versions.includes(asked)) {
         throw new HttpError(HttpStatusCode.NOT_FOUND, 'NOT_FOUND');
@@ -101,7 +101,7 @@ const documentController = (mount: DocMount) => {
     }
 
     protected prefix(input: Input<RouteSchemas>, declared: string): string {
-      return mountPrefix(new URL(input.req.url).pathname, declared);
+      return mountPrefix(pathnameOf(input.req.url), declared);
     }
 
     protected refuse(
@@ -171,7 +171,7 @@ export const buildController = (
       const refused = await this.refuse(input);
       if (refused !== undefined) return refused;
 
-      const { pathname } = new URL(input.req.url);
+      const pathname = pathnameOf(input.req.url);
       return this.explorer.asset(pathname.slice(pathname.lastIndexOf('/') + 1));
     }
   }

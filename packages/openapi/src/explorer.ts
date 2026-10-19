@@ -16,6 +16,8 @@ import type { VersionedDocuments } from './versions.js';
 export class OpenApiExplorer {
   /** Every schema that degraded. Readable straight after `HttpFactory.create()`. */
   readonly warnings: readonly string[];
+  /** Each version with a document of its own, in order. Empty for one document. */
+  readonly versions: readonly string[];
   readonly #base: GeneratedDocument;
   readonly #versions: VersionedDocuments | undefined;
   readonly #jsonPath: string;
@@ -41,14 +43,10 @@ export class OpenApiExplorer {
         ),
       ),
     ];
+    this.versions = [...(this.#versions?.documents.keys() ?? [])];
     this.#jsonPath = jsonPath;
     this.#uiPath = uiPath;
     this.#renderer = renderer;
-  }
-
-  /** Each version with a document of its own, in order. Empty for one document. */
-  get versions(): readonly string[] {
-    return [...(this.#versions?.documents.keys() ?? [])];
   }
 
   /** A version this explorer has no document for gets the primary one. */

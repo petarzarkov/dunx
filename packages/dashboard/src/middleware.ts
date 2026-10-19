@@ -1,5 +1,6 @@
 import {
   LOGO_FAVICON,
+  pathnameOf,
   type RoutePrefix,
   type RouteVersioning,
 } from '@dunx/http/internal';
@@ -12,6 +13,8 @@ import {
   type RouteContext,
 } from '@dunx/http';
 import type { BunRequest } from 'bun';
+import { snapshotOf } from './api/snapshot.js';
+import type { Snapshot } from './api/types.js';
 import { buildBoard, type Board } from './board.js';
 import { DashboardOptions } from './options.js';
 import {
@@ -38,6 +41,7 @@ export class DashboardMiddleware implements Middleware {
   readonly #prefix: string;
   #page: Promise<RenderedPage> | undefined;
   #board: Promise<Board> | undefined;
+  #snapshot: Snapshot | undefined;
 
   constructor(
     options: DashboardOptions,
@@ -58,6 +62,8 @@ export class DashboardMiddleware implements Middleware {
       startedAt: performance.now(),
       page: () => this.#renderPage(),
       board: () => this.#buildBoard(),
+      snapshot: () =>
+        (this.#snapshot ??= snapshotOf(root, options, prefix, versioning)),
     };
 
     if (options.authorize === undefined) {
@@ -75,8 +81,7 @@ export class DashboardMiddleware implements Middleware {
     _ctx: RouteContext,
     next: Next,
   ): Promise<Response> {
-    const url = new URL(req.url);
-    const { pathname } = url;
+    const pathname = pathnameOf(req.url);
     if (pathname !== this.#options.path && !pathname.startsWith(this.#prefix)) {
       return next();
     }
