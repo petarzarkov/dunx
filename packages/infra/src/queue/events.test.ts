@@ -21,12 +21,17 @@ const options = (): QueueOptions =>
     },
   });
 
-const build = (): { events: JobEvents; connection: QueueConnection } => {
+const build = (
+  maxOpen?: number,
+): { events: JobEvents; connection: QueueConnection } => {
   // `error` and above, so an unreachable broker does not print a wall of
   // warnings for the failure every test here is arranging on purpose.
   const logger = new ConsoleLogger(new AsyncRequestContext(), LogLevel.ERROR);
   const connection = new QueueConnection(options(), logger);
-  return { events: new JobEvents(connection, options(), logger), connection };
+  return {
+    events: new JobEvents(connection, options(), logger, maxOpen),
+    connection,
+  };
 };
 
 describe('JobEvents', () => {
@@ -76,6 +81,25 @@ describe('JobEvents', () => {
     await events.onShutdown();
 
     expect(events.opened).toEqual([]);
+    connection.onShutdown();
+  });
+
+  it('evicts the least recently used stream past the cap', async () => {
+    const { events, connection } = build(2);
+
+    events.events('one');
+    events.events('two');
+    expect(events.opened).toEqual(['one', 'two']);
+
+    events.events('three');
+    // `one` was the least recently used, so it was closed and evicted.
+    expect(events.opened).toEqual(['two', 'three']);
+
+    // A stream that comes back is reopened, not recovered from the evicted slot.
+    events.events('one');
+    expect(events.opened).toEqual(['three', 'one']);
+
+    await events.onShutdown();
     connection.onShutdown();
   });
 });

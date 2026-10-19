@@ -221,6 +221,19 @@ describe('the registry at runtime', () => {
     await app.shutdown();
   });
 
+  it('reclaims a fired one-shot instead of holding its handler', async () => {
+    const registry = new ScheduleRegistry(
+      new ScheduleOptions({ keepAlive: false }),
+      new Quiet(),
+    );
+    registry.add({ kind: ScheduleKind.ONCE, at: 5 }, () => undefined, 'once');
+    expect(registry.get('once')).toBeDefined();
+
+    await Bun.sleep(30);
+    expect(registry.get('once')).toBeUndefined();
+    registry.stopAll();
+  });
+
   it('stops every handle on shutdown', async () => {
     const { app, registry } = await boot();
 

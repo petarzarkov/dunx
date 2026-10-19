@@ -202,6 +202,37 @@ describe('QueueModule.forRoot', () => {
   });
 });
 
+describe('JobPublisher eviction', () => {
+  it('evicts the least recently used queue past the cap', async () => {
+    const logger = new ConsoleLogger(undefined, 'fatal');
+    const options = new QueueOptions({ url });
+    const connection = new QueueConnection(options, logger);
+    const publisher = new JobPublisher(
+      connection,
+      options,
+      logger,
+      undefined,
+      undefined,
+      2,
+    );
+
+    publisher.queue('one');
+    publisher.queue('two');
+    expect(publisher.opened).toEqual(['one', 'two']);
+
+    publisher.queue('three');
+    // `one` was the least recently used, so it was closed and evicted.
+    expect(publisher.opened).toEqual(['two', 'three']);
+
+    // A queue that comes back is reopened, not recovered from the evicted slot.
+    publisher.queue('one');
+    expect(publisher.opened).toEqual(['three', 'one']);
+
+    await publisher.onShutdown();
+    connection.onShutdown();
+  });
+});
+
 describe('QueueModule.forRootAsync', () => {
   it('awaits a plain loader', async () => {
     app = await AppFactory.create(

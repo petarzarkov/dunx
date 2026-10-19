@@ -58,4 +58,12 @@ export class AppEvent extends Event {
   get pending(): readonly Promise<unknown>[] {
     return this.#pending;
   }
+
+  /**
+   * Internal: `EventBus.emit` drops the settled work after a dispatch, so a
+   * re-emitted instance does not retain every prior dispatch's promises.
+   */
+  clearPending(): void {
+    this.#pending.length = 0;
+  }
 }

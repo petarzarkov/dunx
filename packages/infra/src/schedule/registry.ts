@@ -45,12 +45,11 @@ export class ScheduleEntry {
  * schedule changes only by redeploying. `trigger` also makes a schedule testable
  * without waiting for a minute boundary, which is `Bun.cron`'s resolution.
  *
- * **A one-shot is held until it is removed.** A `TIMEOUT` entry is marked
- * `finished` when it fires and stays in the map, so `get` and `list` can still
- * report it, and `remove(name)` is what reclaims it. Adding one per tenant or per
- * event without removing it grows the map for the life of the process. dunx's own
- * schedules are all added once at boot, so this only reaches an app calling `add`
- * at runtime.
+ * **A fired one-shot is reclaimed.** A `ONCE` entry is marked `finished` when it
+ * fires and removed once its handler settles, since it has no future and holding
+ * it retained its handler closure. `remove(name)` still reclaims a schedule before
+ * it fires. dunx's own schedules are all added once at boot, so the reclaim only
+ * reaches an app calling `add` at runtime.
  */
 export class ScheduleRegistry {
   readonly #armed = new Map<string, Armed>();
@@ -175,7 +174,12 @@ export class ScheduleRegistry {
         ? setInterval(() => void this.#invoke(armed, 'interval'), ms)
         : setTimeout(() => {
             entry.finished = true;
-            void this.#invoke(armed, 'timeout');
+            const run = this.#invoke(armed, 'timeout');
+            // A fired one-shot has no future, so it is reclaimed once its handler
+            // settles. Holding it kept its handler closure for the process
+            // lifetime, which a per-tenant or per-event add() grew without bound.
+            if (run === undefined) this.#armed.delete(entry.name);
+            else void run.finally(() => this.#armed.delete(entry.name));
           }, ms);
     if (!this.options.keepAlive) {
       (timer as unknown as { unref?: () => void }).unref?.();
