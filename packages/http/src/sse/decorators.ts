@@ -11,7 +11,7 @@ export type SseSchemas = Pick<RouteSchemas, 'params' | 'query'>;
 export type SseResult = SseStream | AsyncIterable<SseEvent>;
 
 /** {@link Input} plus the resume header. */
-export type SseInput<O extends SseSchemas> = Input<O> & {
+export type SseInput<O extends SseSchemas = SseSchemas> = Input<O> & {
   /** The `id` this client last saw, from `Last-Event-ID`. Absent on a first connection. */
   readonly lastEventId: string | undefined;
 };

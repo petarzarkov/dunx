@@ -67,8 +67,9 @@ export class NotesController {
 
   // Destructuring at the parameter is the usual shape, and it is what every other
   // handler here does. The whole object has a name when a handler wants to pass it
-  // on: `whoami(input: Input<RouteSchemas>)` types the same. No schemas are
-  // declared on this route, so `req` is all it carries.
+  // on: `whoami(input: Input)` types the same, because the type argument
+  // defaults to `RouteSchemas`. No schemas are declared on this route, so `req`
+  // is all it carries.
   @ApiDoc({
     summary: 'Echo the caller’s address',
     description:
@@ -76,7 +77,7 @@ export class NotesController {
     deprecated: true,
   })
   @Get('/whoami')
-  whoami({ req }: Input<RouteSchemas>): { ip: string | undefined } {
+  whoami({ req }: Input): { ip: string | undefined } {
     return { ip: this.address.of(req) };
   }
 

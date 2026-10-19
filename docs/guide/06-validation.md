@@ -271,7 +271,7 @@ The saving grace is that **no type is written twice**. `Input<O>` is a type-leve
 function over the options object:
 
 ```ts
-export type Input<O extends RouteSchemas> = {
+export type Input<O extends RouteSchemas = RouteSchemas> = {
   readonly req: BunRequest;
 } & (O extends { body: infer B }
   ? { readonly body: InferOutput<B> }
@@ -288,11 +288,12 @@ Every field type still comes from the schema. `Input<typeof createUser>` is
 `{ req: BunRequest; body: { name: string } }` because `CreateUser` says so, and
 changing the schema changes the handler's type with no second edit.
 
-A route with no schemas at all still gets the request:
+A route with no schemas at all still gets the request. The type argument defaults
+to `RouteSchemas`, so `Input` on its own is that route:
 
 ```ts
 @Get('/whoami')
-whoami({ req }: Input<RouteSchemas>): { ip: string | undefined } {
+whoami({ req }: Input): { ip: string | undefined } {
   return { ip: this.address.of(req) };
 }
 ```

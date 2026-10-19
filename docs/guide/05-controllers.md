@@ -229,7 +229,7 @@ arrive as strings on `req.params`:
 
 ```ts
 @Get('/:name')
-one({ req }: Input<RouteSchemas>): { greeting: string } {
+one({ req }: Input): { greeting: string } {
   return { greeting: `hello, ${req.params['name'] ?? 'world'}` };
 }
 ```
@@ -289,7 +289,7 @@ record(input: Input<typeof createNote>): Note {
 You must write the `Input<...>` annotation. Do not annotate the options constant
 as `: RouteSchemas`. [Validation](./06-validation.md#why-input-must-be-written-out)
 shows the compiler errors and explains why. For a route with no options, annotate
-`Input<RouteSchemas>` or take no parameter.
+`Input` (its type argument defaults to `RouteSchemas`) or take no parameter.
 
 Any [Standard Schema](./06-validation.md#standard-schema-is-the-contract)
 validator works. How each `content-type` is parsed, and the 400 a rejected schema
