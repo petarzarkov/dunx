@@ -6,7 +6,8 @@ import { assertZoneUsable, type ScheduleOptions } from './options.js';
 
 interface Armed {
   readonly entry: ScheduleEntry;
-  readonly run: () => unknown;
+  /** Released once a one-shot fires, so its handler closure is not retained. */
+  run: (() => unknown) | undefined;
   cron?: Bun.CronJob | undefined;
   timer?: ReturnType<typeof setInterval> | undefined;
 }
@@ -45,12 +46,10 @@ export class ScheduleEntry {
  * schedule changes only by redeploying. `trigger` also makes a schedule testable
  * without waiting for a minute boundary, which is `Bun.cron`'s resolution.
  *
- * **A one-shot is held until it is removed.** A `TIMEOUT` entry is marked
- * `finished` when it fires and stays in the map, so `get` and `list` can still
- * report it, and `remove(name)` is what reclaims it. Adding one per tenant or per
- * event without removing it grows the map for the life of the process. dunx's own
- * schedules are all added once at boot, so this only reaches an app calling `add`
- * at runtime.
+ * **A fired one-shot keeps its entry but drops its handler.** A `ONCE` entry is
+ * marked `finished` when it fires and stays in the map, so `get` and `list` still
+ * report it, but its handler closure is released so a per-tenant or per-event
+ * `add()` no longer retains what it captured. `remove(name)` reclaims the entry.
  */
 export class ScheduleRegistry {
   readonly #armed = new Map<string, Armed>();
@@ -175,7 +174,11 @@ export class ScheduleRegistry {
         ? setInterval(() => void this.#invoke(armed, 'interval'), ms)
         : setTimeout(() => {
             entry.finished = true;
-            void this.#invoke(armed, 'timeout');
+            const run = this.#invoke(armed, 'timeout');
+            // A fired one-shot has no future, so its handler closure is released
+            // once it settles; the entry stays for `get` and `list`.
+            if (run === undefined) armed.run = undefined;
+            else void run.finally(() => (armed.run = undefined));
           }, ms);
     if (!this.options.keepAlive) {
       (timer as unknown as { unref?: () => void }).unref?.();
@@ -219,6 +222,9 @@ export class ScheduleRegistry {
    */
   #invoke(armed: Armed, source: string): Promise<unknown> | undefined {
     const { entry } = armed;
+    const handler = armed.run;
+    // A fired one-shot released its handler, so triggering it runs nothing.
+    if (handler === undefined) return undefined;
     if (entry.running && entry.overlap === Overlap.SKIP) {
       const elapsed = entry.lastRunAt
         ? Date.now() - entry.lastRunAt.getTime()
@@ -260,7 +266,7 @@ export class ScheduleRegistry {
 
     let result: unknown;
     try {
-      result = armed.run();
+      result = handler();
     } catch (error) {
       settle(error);
       return undefined;

@@ -142,6 +142,9 @@ export class EventBus {
     }
 
     await this.#settle(event, collected, from);
+    // The waitUntil work collected on the instance is settled now, so it is
+    // dropped rather than left for the next emit of a reused event to skip past.
+    event.clearPending();
 
     for (const { subscriber, error } of collected.failures) {
       this.#logger.error(`${subscriber} failed handling ${label}`, error);

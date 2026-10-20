@@ -8,10 +8,17 @@ import type { JobTracing } from './tracing.js';
 
 /**
  * Distinct queue names past which they are more likely derived from data than
- * written by hand. A warning, not a cap: `Queue.close()` is async, so evicting one
- * races a publish. See `module.test.ts`.
+ * written by hand. A warning, not a hard stop: see `MAX_OPEN_QUEUES`.
  */
 const WARN_AT_QUEUES = 64;
+
+/**
+ * The most distinct queues held open at once. Past this, the least recently used
+ * queue is closed and evicted, so a name derived from data cannot reserve a queue
+ * and a Redis connection per value without bound. High enough that an app with
+ * hundreds of legitimate queues never touches it.
+ */
+const MAX_OPEN_QUEUES = 1024;
 
 /**
  * Enqueues jobs. The other half of the split the dispatcher is: nothing here knows
@@ -28,6 +35,7 @@ export class JobPublisher implements OnShutdown {
   readonly #logger: Logger;
   readonly #metrics: QueueMetrics | undefined;
   readonly #tracing: JobTracing | undefined;
+  readonly #maxOpen: number;
   readonly #queues = new Map<string, Queue>();
 
   constructor(
@@ -36,12 +44,14 @@ export class JobPublisher implements OnShutdown {
     logger: Logger,
     metrics?: QueueMetrics,
     tracing?: JobTracing,
+    maxOpen = MAX_OPEN_QUEUES,
   ) {
     this.#connection = connection;
     this.#options = options;
     this.#logger = logger;
     this.#metrics = metrics;
     this.#tracing = tracing;
+    this.#maxOpen = maxOpen;
   }
 
   /** The names this publisher has opened a queue for so far. */
@@ -57,13 +67,20 @@ export class JobPublisher implements OnShutdown {
    * validate and nothing gained by holding a socket for a queue nobody publishes
    * to.
    *
-   * **Held once opened, and `name` is whatever the caller passed**, so a name
-   * derived from data reserves a queue and a Redis connection per value, until
-   * shutdown. Put the tenant in the payload, not the queue name.
+   * `name` is whatever the caller passed, so a name derived from data reserves a
+   * queue and a Redis connection per value. That is what `maxOpen` bounds: past it,
+   * the least recently used queue is closed and evicted. Put the tenant in the
+   * payload, not the queue name.
    */
   queue(name: string): Queue {
     const existing = this.#queues.get(name);
-    if (existing) return existing;
+    if (existing) {
+      // Refresh recency so eviction takes the least recently used, not the
+      // oldest-opened.
+      this.#queues.delete(name);
+      this.#queues.set(name, existing);
+      return existing;
+    }
 
     const created = new Queue(name, {
       connection: this.#connection.client(),
@@ -92,7 +109,18 @@ export class JobPublisher implements OnShutdown {
           'the job payload and publish to one queue instead.',
       );
     }
+    this.#evict();
     return created;
+  }
+
+  /** Closes the least recently used queue once the cap is crossed. */
+  #evict(): void {
+    if (this.#queues.size <= this.#maxOpen) return;
+    const oldest = this.#queues.keys().next().value;
+    if (oldest === undefined) return;
+    const queue = this.#queues.get(oldest);
+    this.#queues.delete(oldest);
+    void queue?.close();
   }
 
   /**

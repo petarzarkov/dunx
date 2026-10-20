@@ -400,4 +400,19 @@ describe('re-emitting one event instance', () => {
     expect(first.failures).toHaveLength(1);
     expect(second.failures).toHaveLength(1);
   });
+
+  it('drops the collected waitUntil work after each dispatch', async () => {
+    const { bus: eventBus } = bus();
+    eventBus.on(Placed, (event) => {
+      event.waitUntil(Promise.resolve());
+    });
+
+    const event = new Placed('a');
+    await eventBus.emit(event);
+    expect(event.pending).toHaveLength(0);
+
+    // A reused event does not retain the previous dispatch's promises.
+    await eventBus.emit(event);
+    expect(event.pending).toHaveLength(0);
+  });
 });

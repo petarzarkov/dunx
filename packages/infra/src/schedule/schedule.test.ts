@@ -221,6 +221,30 @@ describe('the registry at runtime', () => {
     await app.shutdown();
   });
 
+  it('releases the handler of a fired one-shot, keeping the entry', async () => {
+    const registry = new ScheduleRegistry(
+      new ScheduleOptions({ keepAlive: false }),
+      new Quiet(),
+    );
+    let calls = 0;
+    registry.add(
+      { kind: ScheduleKind.ONCE, at: 5 },
+      () => {
+        calls += 1;
+      },
+      'once',
+    );
+
+    await Bun.sleep(30);
+    // Still listed, marked finished, but its handler is released.
+    expect(registry.get('once')?.finished).toBe(true);
+    expect(calls).toBe(1);
+
+    await registry.trigger('once');
+    expect(calls).toBe(1);
+    registry.stopAll();
+  });
+
   it('stops every handle on shutdown', async () => {
     const { app, registry } = await boot();
 

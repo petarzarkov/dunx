@@ -11,6 +11,14 @@ import { QueueOptions } from './options.js';
 const WARN_AT_QUEUES = 64;
 
 /**
+ * The most distinct streams held open at once. Past this, the least recently used
+ * stream is closed and evicted, so a name derived from data cannot hold a blocking
+ * socket per value without bound. High enough for any app with hundreds of
+ * legitimate queues.
+ */
+const MAX_OPEN_EVENTS = 1024;
+
+/**
  * How long one stream gets to close before shutdown stops waiting on it.
  *
  * `QueueEvents.close()` against an unreachable broker neither resolves nor
@@ -40,16 +48,19 @@ export class JobEvents implements OnShutdown {
   readonly #connection: QueueConnection;
   readonly #options: QueueOptions;
   readonly #logger: Logger;
+  readonly #maxOpen: number;
   readonly #events = new Map<string, QueueEvents>();
 
   constructor(
     connection: QueueConnection,
     options: QueueOptions,
     logger: Logger,
+    maxOpen = MAX_OPEN_EVENTS,
   ) {
     this.#connection = connection;
     this.#options = options;
     this.#logger = logger;
+    this.#maxOpen = maxOpen;
   }
 
   /** The names this has opened an event stream for so far. */
@@ -63,10 +74,18 @@ export class JobEvents implements OnShutdown {
    * Opened on first use for the reason `JobPublisher.queue()` is, and one more:
    * `autorun` defaults to true and starts a blocking `XREAD` in the constructor,
    * so a process that never waits on a job holds no blocking socket.
+   *
+   * `name` is whatever the caller passed, so a name derived from data holds a
+   * blocking socket per value. `maxOpen` bounds that: past it, the least recently
+   * used stream is closed and evicted.
    */
   events(name: string): QueueEvents {
     const existing = this.#events.get(name);
-    if (existing) return existing;
+    if (existing) {
+      this.#events.delete(name);
+      this.#events.set(name, existing);
+      return existing;
+    }
 
     const created = new QueueEvents(name, {
       connection: this.#connection.client(),
@@ -88,7 +107,18 @@ export class JobEvents implements OnShutdown {
           'data in the job payload, not in the queue name.',
       );
     }
+    this.#evict();
     return created;
+  }
+
+  /** Closes the least recently used stream once the cap is crossed. */
+  #evict(): void {
+    if (this.#events.size <= this.#maxOpen) return;
+    const oldest = this.#events.keys().next().value;
+    if (oldest === undefined) return;
+    const stream = this.#events.get(oldest);
+    this.#events.delete(oldest);
+    if (stream !== undefined) void this.#close(oldest, stream);
   }
 
   /**
