@@ -4,6 +4,42 @@ Every release, newest first. Written by `bun run version` from the commits in th
 release range. Every @dunx package shares one version and ships together, so a
 release covers all of them.
 
+## 3.10.4 - 2026-10-20
+
+Bun 1.4.3, log filters, leak fixes, hot-path URL parsing
+
+### Features
+
+- **logger**: log filters through @arkv/logger 0.14.0 ([`8632f21`](https://github.com/petarzarkov/dunx/commit/8632f212cdf1c95565c796e49f4918f0bc7e2fa4))
+
+### Fixes
+
+- **http**: sync the notes template and regenerate the MCP corpus ([`2b8e180`](https://github.com/petarzarkov/dunx/commit/2b8e180c8a8a13bd403ce6872fca7f3f2330986e))
+- **http**: default Input's type argument to RouteSchemas ([`76559a5`](https://github.com/petarzarkov/dunx/commit/76559a58b281284175af42ce521c54a5eb2b6c59))
+- **schedule**: keep a fired one-shot listed, only release its handler ([`a468c18`](https://github.com/petarzarkov/dunx/commit/a468c184f387bb907c6ddd2bac814373a76a737f))
+- bound three unbounded-growth leaks ([`6c0f3b1`](https://github.com/petarzarkov/dunx/commit/6c0f3b1e80ab6ba5a624a03c74a1cb88e3f09049))
+- **redis**: drop the subscriber leak workarounds 1.4.3 made unnecessary ([`cfc6efb`](https://github.com/petarzarkov/dunx/commit/cfc6efb9060a2fb30ce24ffc5e6ae59f629f61e1))
+- **example**: an email filter that skips version tags and reaches josé ([`f3ec1d1`](https://github.com/petarzarkov/dunx/commit/f3ec1d1a4f90a70bb8907215099340186ec76402))
+
+### Performance
+
+- avoid per-request URL parsing, memoize the dashboard snapshot ([`13ed886`](https://github.com/petarzarkov/dunx/commit/13ed886b1a175327f345841867a0cfd1e529bb0b))
+
+### Refactors
+
+- **examples**: count with private fields again ([`55f9ff3`](https://github.com/petarzarkov/dunx/commit/55f9ff385a1f35403416a868cf30c29d6b3f942f))
+
+### Documentation
+
+- where to bound a slow route, and the client under bullmq ([`4a87be8`](https://github.com/petarzarkov/dunx/commit/4a87be850890823600548075acaed3c715bcbbb3))
+- name bun check as the type gate and the examples/minimal exception ([`ffc1d76`](https://github.com/petarzarkov/dunx/commit/ffc1d76bfa22dd7c289aa028377d8664b5bf9b68))
+
+### Other changes
+
+- bun check for consumers too, and the docs suite in parallel ([`90ac153`](https://github.com/petarzarkov/dunx/commit/90ac153dd0d6c14e75ab06ee3df43a8ddf9516bd))
+- require Bun 1.4.3 ([`346fe74`](https://github.com/petarzarkov/dunx/commit/346fe74a11feb11b26e7f28efa1960d8e0aa13e2))
+- typecheck workspaces with bun check ([`f0b0e52`](https://github.com/petarzarkov/dunx/commit/f0b0e5259d4836bedd05b7f8dafe311b5df8ca08))
+
 ## 3.10.3 - 2026-10-14
 
 OpenAPI tag groups, brotli compression, split cache TTLs
