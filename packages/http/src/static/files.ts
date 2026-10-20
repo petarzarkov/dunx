@@ -2,6 +2,7 @@ import { join, normalize, resolve } from 'node:path';
 import type { BunRequest } from 'bun';
 import type { Middleware, Next } from '../server/middleware.js';
 import type { RouteContext } from '../server/context.js';
+import { pathnameOf } from '../server/url.js';
 import { StaticOptions } from './options.js';
 
 /**
@@ -85,7 +86,7 @@ export class StaticFiles implements Middleware {
     _ctx: RouteContext,
     next: Next,
   ): Promise<Response> {
-    const { pathname } = new URL(req.url);
+    const pathname = pathnameOf(req.url);
     if (pathname !== this.#options.path && !pathname.startsWith(this.#prefix)) {
       return next();
     }

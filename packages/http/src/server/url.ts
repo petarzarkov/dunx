@@ -11,3 +11,15 @@ export const pathnameOf = (url: string): string => {
   const mark = url.indexOf('?', from);
   return mark === -1 ? url.slice(from) : url.slice(from, mark);
 };
+
+/**
+ * The query string of an absolute URL, without the leading `?`, and with a
+ * fragment (which a request-target is not meant to carry) stripped. `''` when
+ * there is none.
+ */
+export const searchOf = (url: string): string => {
+  const start = url.indexOf('?');
+  if (start === -1) return '';
+  const end = url.indexOf('#', start + 1);
+  return end === -1 ? url.slice(start + 1) : url.slice(start + 1, end);
+};

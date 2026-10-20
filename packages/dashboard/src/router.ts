@@ -1,12 +1,15 @@
 import type { ModuleRef } from '@dunx/core';
 import { inlineScriptPolicy, setAbsentHeaders } from '@dunx/http';
-import type { RoutePrefix, RouteVersioning } from '@dunx/http/internal';
+import {
+  pathnameOf,
+  type RoutePrefix,
+  type RouteVersioning,
+} from '@dunx/http/internal';
 import { boardNames, matchBoard, type Board } from './board.js';
 import { redisReport } from './api/redis.js';
 import { runtimeReport } from './api/runtime.js';
-import { snapshotOf } from './api/snapshot.js';
 import type { DashboardOptions } from './options.js';
-import type { StatsReport } from './api/types.js';
+import type { Snapshot, StatsReport } from './api/types.js';
 
 /**
  * What the mount answers, and nothing else. A path outside it never reaches here.
@@ -57,6 +60,8 @@ export interface RouterDeps {
   readonly page: () => Promise<RenderedPage>;
   /** bull-board, built lazily so an app that never opens it holds no socket. */
   readonly board: () => Promise<Board>;
+  /** The static graph, computed once and reused across the page's polls. */
+  readonly snapshot: () => Snapshot;
 }
 
 const handleApi = async (
@@ -68,9 +73,7 @@ const handleApi = async (
 
   switch (segments[0]) {
     case 'snapshot':
-      return json(
-        snapshotOf(deps.root, deps.options, deps.prefix, deps.versioning),
-      );
+      return json(deps.snapshot());
     case 'runtime':
       return json(await runtimeReport(deps.options, deps.startedAt));
     case 'redis':
@@ -142,11 +145,7 @@ export const handleDashboard = async (
     if (board.routes === undefined) {
       return fail(503, board.unavailable ?? 'no queue board');
     }
-    const match = matchBoard(
-      board.routes,
-      method,
-      new URL(request.url).pathname,
-    );
+    const match = matchBoard(board.routes, method, pathnameOf(request.url));
     if (match !== undefined) {
       // bull-board reads `request.params`, which `Bun.serve` fills in when it
       // does the matching. This dispatch is manual, so the field has to be put

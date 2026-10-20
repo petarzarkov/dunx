@@ -14,6 +14,7 @@ import {
   type ValidationIssue,
 } from './errors.js';
 import { HttpStatusCode } from './status.js';
+import { searchOf } from './url.js';
 
 /**
  * Built once per route at boot. A route that declares nothing gets the identity
@@ -190,24 +191,6 @@ const bodyFill =
       },
     );
   };
-
-/**
- * The query string, without parsing the whole URL to reach it. `new URL(req.url)`
- * resolves scheme, host, port, path and fragment to hand back a `searchParams`, and
- * measured **~1,000 ns of the ~1,500 ns** a `query` route used to cost - more than
- * the entire body reader. `RequestLoggingMiddleware` took the same slice for the
- * same reason.
- *
- * The fragment is stripped even though a client is not supposed to send one, because
- * `new URL` stripped it and a hostile request-target should not change what a schema
- * sees.
- */
-const searchOf = (url: string): string => {
-  const start = url.indexOf('?');
-  if (start === -1) return '';
-  const end = url.indexOf('#', start + 1);
-  return end === -1 ? url.slice(start + 1) : url.slice(start + 1, end);
-};
 
 const queryFill =
   (schema: StandardSchemaV1): Fill =>
