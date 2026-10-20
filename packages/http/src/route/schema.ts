@@ -75,9 +75,10 @@ export type ResponseMap = Readonly<
  * }
  * ```
  *
- * Path params without a `params` schema stay on `input.req.params`.
+ * Path params without a `params` schema stay on `input.req.params`. The default
+ * argument makes `Input` on its own the schema-less route.
  */
-export type Input<O extends RouteSchemas> = {
+export type Input<O extends RouteSchemas = RouteSchemas> = {
   readonly req: BunRequest;
 } & (O extends { body: infer B }
   ? { readonly body: InferOutput<B> }
