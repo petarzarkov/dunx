@@ -1,5 +1,6 @@
 import type { BunRequest } from 'bun';
 import { RawBody } from './raw-body.js';
+import { parseCustomBody } from './custom-body.js';
 import type {
   RouteInput,
   RouteSchemas,
@@ -221,8 +222,27 @@ export const buildInputReader = (
   options: RouteSchemas | undefined,
 ): InputReader => {
   const fills: Fill[] = [];
-  if (options?.body !== undefined) fills.push(bodyFill(options.body));
-  if (options?.query !== undefined) fills.push(queryFill(options.query));
+  if (options?.body !== undefined) {
+    const schema = options.body;
+    const parse = options.bodyParser;
+    fills.push(
+      parse === undefined
+        ? bodyFill(schema)
+        : (draft) =>
+            Promise.resolve(parseCustomBody(draft.req, parse)).then((value) =>
+              fillWith(draft, 'body', schema, value),
+            ),
+    );
+  }
+  if (options?.query !== undefined) {
+    const schema = options.query;
+    const parse = options.queryParser;
+    fills.push(
+      parse === undefined
+        ? queryFill(schema)
+        : (draft) => fillWith(draft, 'query', schema, parse(draft.req)),
+    );
+  }
   if (options?.params !== undefined) fills.push(paramsFill(options.params));
 
   if (fills.length === 0) return (req) => ({ req });

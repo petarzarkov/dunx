@@ -421,3 +421,32 @@ and error quality. The measurements are in
   options on costs roughly two thirds of the throughput on the `validate`
   scenario, and the request body is the field most likely to contain a password.
   See [Middleware and guards](./08-middleware-and-guards.md#request-logging).
+
+## Custom request parsers
+
+A route can supply `bodyParser` alongside `body`, or `queryParser` alongside
+`query`, to replace decoding while retaining Standard Schema validation and
+`Input` inference. A parser without its matching schema is not invoked.
+
+```ts
+const customText = {
+  body: z.object({ text: z.string() }),
+  bodyParser: async (req: BunRequest) => ({ text: await req.text() }),
+} as const satisfies RouteSchemas;
+```
+
+Import `BunRequest` from `bun`. The body parser may return a value or a promise;
+the query parser returns a value synchronously. Both receive the request and
+return the value for their schema to validate.
+
+Custom body parsers choose which
+content types to accept; the built-in media-type dispatch is bypassed. Throw an
+`HttpError` for a client decoding error. Parser errors retain their identity and
+flow through the ordinary error mapper, while rejected schema results remain
+validation errors.
+
+Custom body parsing preserves request-body logging and can read bytes already
+buffered by middleware such as the idempotency guard. In that case the parser
+receives a replayable request with the original URL, method, headers, signal and
+route params; arbitrary properties attached by middleware are not copied.
+Routes without parser options retain the built-in parsers.
