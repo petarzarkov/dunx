@@ -31,6 +31,12 @@ export const toResponse = (
   if (value instanceof Response) {
     return tags === undefined ? value : conditionalGet(value, req);
   }
+  if (
+    status === HttpStatusCode.NO_CONTENT ||
+    status === HttpStatusCode.NOT_MODIFIED
+  ) {
+    return secured ? secured.empty(status) : new Response(null, { status });
+  }
   if (value === undefined || value === null) {
     return secured
       ? secured.empty(HttpStatusCode.NO_CONTENT)
