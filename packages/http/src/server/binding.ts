@@ -15,6 +15,7 @@ export interface BindingPlan {
 /** The protocol settings, fixed at construction. `undefined` leaves Bun's own
  * default in place rather than restating it. */
 export interface BindingProtocols {
+  readonly hostname?: string | undefined;
   readonly http2?: boolean | undefined;
   readonly http1?: boolean | undefined;
   /**
@@ -70,7 +71,8 @@ export class ServerBinding {
 
   bind(plan: BindingPlan): Bound {
     const { websocket: ws } = plan;
-    const { http2, http1, gatewayPort, idleTimeout } = this.#protocols;
+    const { http2, http1, gatewayPort, idleTimeout, hostname } =
+      this.#protocols;
     const split = ws !== undefined && gatewayPort !== undefined;
 
     // One call: a route that may answer `undefined` because it upgraded is only
@@ -84,6 +86,7 @@ export class ServerBinding {
         : { routes: plan.routes };
     this.#main = Bun.serve({
       port: plan.port,
+      ...(hostname !== undefined && { hostname }),
       fetch: plan.fetch,
       ...(http2 !== undefined && { http2 }),
       ...(http1 !== undefined && { http1 }),
@@ -95,6 +98,7 @@ export class ServerBinding {
       try {
         this.#gateways = Bun.serve({
           port: gatewayPort,
+          ...(hostname !== undefined && { hostname }),
           // The same fallback as the routes port, so a miss here is logged,
           // gets its CORS headers and honours `notFound` the same way. The only
           // difference between the two servers is what is in the table.

@@ -141,6 +141,7 @@ export class HttpApplication extends ShutdownAware implements HttpApp {
       http1: options.http1,
       gatewayPort: options.gatewayPort,
       idleTimeout: options.idleTimeout,
+      hostname: options.hostname,
     });
     this.#split = options.gatewayPort !== undefined && websocket !== undefined;
     this.gatewayPaths = websocket?.paths ?? [];
