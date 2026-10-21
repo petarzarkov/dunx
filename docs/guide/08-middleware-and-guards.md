@@ -692,3 +692,10 @@ your routes, because `HttpMethod` has no `OPTIONS` verb: only CORS mounts one.
 
 Next: [WebSockets](./09-websockets.md), which are served by the same `Bun.serve`
 call and the same container.
+
+### Declared response status
+
+`ctx.status` exposes the route's explicit `status` option to middleware. It is
+`undefined` when no override was declared; it does not resolve the HTTP method's
+default or predict the status of a returned `Response`. Like the other context
+fields, it is captured once when the route table is built.
