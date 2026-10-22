@@ -22,6 +22,8 @@ export interface RouteContext {
    * expensive thing it can do. See `raw-body.ts`.
    */
   readonly parsesBody: boolean;
+  /** Explicit route status, absent when the HTTP method supplies its default. */
+  readonly status?: number | undefined;
   get<T>(key: MetaKey<T>): T | undefined;
 }
 
@@ -40,6 +42,7 @@ export const buildContext = (route: DiscoveredRoute): RouteContext => {
     method: route.method,
     path: route.path,
     parsesBody: route.options?.body !== undefined,
+    status: route.options?.status,
     get: <T>(key: MetaKey<T>): T | undefined =>
       record.get(key.id) as T | undefined,
   });
