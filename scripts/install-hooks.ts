@@ -40,6 +40,14 @@ const hooks = join(
  */
 const BIN = '"$(git rev-parse --show-toplevel)/node_modules/.bin"';
 
+/**
+ * Both hooks run `bun fmt`, and `bun` is never in node_modules/.bin. A GUI git
+ * client can start the hook with a PATH that lacks Bun's install directory, so
+ * fall back to it rather than fail every commit and push with exit 127.
+ */
+const BUN_ON_PATH =
+  'command -v bun >/dev/null 2>&1 || PATH="${BUN_INSTALL:-$HOME/.bun}/bin:$PATH"';
+
 const PRE_COMMIT = `#!/usr/bin/env sh
 # Managed by scripts/install-hooks.ts. Edit that, not this.
 #
@@ -53,6 +61,7 @@ const PRE_COMMIT = `#!/usr/bin/env sh
 # fails with "No such file or directory". It keeps .stagelint.yml readable as
 # bare binary names.
 PATH="$(git rev-parse --show-toplevel)/node_modules/.bin:$PATH"
+${BUN_ON_PATH}
 export PATH
 exec ${BIN}/stagelint "$@"
 `;
@@ -65,6 +74,7 @@ const PRE_PUSH = `#!/usr/bin/env sh
 # \`bun fmt --list-different\` exits 1 when it lists files and 2 when it fails, so
 # only 1 with a list means "unformatted". A Bun older than 1.4.4 has no \`bun fmt\`
 # and exits 1 with nothing listed.
+${BUN_ON_PATH}
 unformatted=$(bun fmt --list-different)
 status=$?
 [ "$status" -eq 0 ] && exit 0
