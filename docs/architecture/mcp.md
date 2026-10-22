@@ -195,7 +195,7 @@ confidently. That is the failure `gen:readme --check` exists for.
 
 The whole corpus is three `JSON.parse` calls over one string literal each, which
 keeps the file at 13 lines. An object literal spanning ten thousand lines would give
-`max-lines` and `oxfmt` an opinion about generated data.
+`max-lines` and `bun fmt` an opinion about generated data.
 
 Every input is something CI already builds, boots or tours. The starter is
 `examples/minimal/src` plus a manifest, the base template's `bunfig.toml` and its

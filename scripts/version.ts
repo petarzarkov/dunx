@@ -187,12 +187,12 @@ const writeChangelog = (
 
   writeFileSync(path, prependRelease(existing, section));
   // The section quotes a human-written commit body verbatim, so its markdown is
-  // whatever that author typed. oxfmt has opinions - it rewrites `*emphasis*` to
-  // `_emphasis_` - and the pre-push hook refuses to push anything oxfmt would
+  // whatever that author typed. bun fmt has opinions - it rewrites `*emphasis*` to
+  // `_emphasis_` - and the pre-push hook refuses to push anything bun fmt would
   // change. A release commit body containing `*a word*` therefore published to npm
   // and then deadlocked its own push, leaving main on the previous version while
   // the registry had moved on. Normalising here means the prose cannot do that.
-  execSync(`bunx oxfmt --write ${JSON.stringify(path)}`, { stdio: 'ignore' });
+  execSync(`bun fmt ${JSON.stringify(path)}`, { stdio: 'ignore' });
   console.log(`Wrote the ${version} section of ${CHANGELOG_PATH}`);
   return path;
 };

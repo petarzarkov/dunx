@@ -12,12 +12,12 @@ which routes it to a private advisory rather than a public issue.
 
 ## Prerequisites
 
-**Bun 1.4.3 or newer, and nothing else.** Bun is the runtime, the test runner, the
-bundler and the package manager.
+**Bun 1.4.4 or newer, and nothing else.** Bun is the runtime, the test runner, the
+bundler, the package manager, the type checker and the formatter.
 
 ```bash
 curl -fsSL https://bun.sh/install | bash
-bun --version   # CI pins 1.4.3
+bun --version   # CI pins 1.4.4
 ```
 
 `npm`, `npx`, `yarn` and `pnpm` are never used in this repo. Run tools with
@@ -76,7 +76,7 @@ Run these before you push. CI runs the same set, in this order.
 | ---------------------- | --------------------------------------------------------------------------- |
 | `bun run build`        | Topological build of every workspace, JS plus `.d.ts`                       |
 | `bun run lint:check`   | oxlint, no fixing                                                           |
-| `bun run format:check` | oxfmt, no writing                                                           |
+| `bun run format:check` | `bun fmt --check`, no writing                                               |
 | `bun run typecheck`    | `bun check` in every workspace                                              |
 | `bun run test:cov`     | One root run over `./packages ./scripts`, then rebuilds the coverage report |
 | `bun run test`         | Every workspace's own suite, bailing on first failure                       |
@@ -290,8 +290,9 @@ replacement.
 It has its own tsconfig, it is excluded from every other project, and the
 subject registry reaches it by string path so no compiler crosses the boundary.
 
-- **No ESLint and no Biome.** The linter is oxlint (`.oxlintrc.json`) and the
-  formatter is oxfmt (`.oxfmtrc.json`). Repo-local rules live in
+- **No ESLint, no Biome and no Prettier.** The linter is oxlint (`.oxlintrc.json`)
+  and the formatter is `bun fmt`, which reads `.oxfmtrc.json` and prints what oxfmt
+  prints. Repo-local rules live in
   `scripts/oxlint-plugin.js`, the one file in this repo that is not TypeScript, in
   the repo: oxlint loads a JS plugin by spawning Node rather than Bun, so a `.ts`
   file there dies with `ERR_UNKNOWN_FILE_EXTENSION`. `@ts-check` plus JSDoc keeps it

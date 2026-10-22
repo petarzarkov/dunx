@@ -148,7 +148,7 @@ them from memory:
 | Gate                             | Enforces                                                                                 |
 | -------------------------------- | ---------------------------------------------------------------------------------------- |
 | `oxlint`                         | no `enum`, no `Dunx` prefix, no `any`, 500-line files (800 for tests)                    |
-| `oxfmt`                          | formatting                                                                               |
+| `bun fmt`                        | formatting, configured by `.oxfmtrc.json`                                                |
 | `bun check`                      | strict, `noUncheckedIndexedAccess`, `exactOptionalPropertyTypes`, `verbatimModuleSyntax` |
 | `scripts/rule-native.test.ts`    | Rule 1                                                                                   |
 | `scripts/rule-example.test.ts`   | Rule 4                                                                                   |

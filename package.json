@@ -30,8 +30,8 @@
     "test:cov": "bun test ./packages ./tools ./scripts --coverage --parallel --path-ignore-patterns='**/templates/**' --path-ignore-patterns='**/tmp/**' && bun run gen:cov",
     "lint": "oxlint --fix .",
     "lint:check": "oxlint --max-warnings 0 .",
-    "format": "oxfmt --write .",
-    "format:check": "oxfmt --check .",
+    "format": "bun fmt",
+    "format:check": "bun fmt --check",
     "typecheck": "bun run --parallel --filter '*' typecheck",
     "docs:build": "bun run --filter '@dunx/docs' build",
     "docs:dev": "bun run --filter '@dunx/docs' dev",
@@ -48,7 +48,6 @@
     "@stagelint/stagelint": "0.2.1",
     "@types/bun": "1.4.3",
     "@types/node": "26.6.5",
-    "oxfmt": "0.72.0",
     "oxlint": "1.87.0",
     "oxlint-tsgolint": "7.0.2004",
     "typescript": "7.0.2"
