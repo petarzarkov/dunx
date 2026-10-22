@@ -309,6 +309,11 @@ second-guessed.
 
 `undefined` and `null` become 204 rather than `Response.json(null)`.
 
+An explicit `status: 204` or `status: 304` always produces an empty response,
+regardless of the returned value. No JSON content type is added, and a declared
+304 stays 304 when the handler returns `undefined` or `null`. A returned
+`Response` still takes precedence over the declared status.
+
 With `etag: true` a returned value gets an `ETag` and a 304 on revalidation; see
 [ETags and conditional GET](./15-caching.md#etags-and-conditional-get).
 
