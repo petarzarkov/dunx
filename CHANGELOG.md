@@ -4,6 +4,30 @@ Every release, newest first. Written by `bun run version` from the commits in th
 release range. Every @dunx package shares one version and ships together, so a
 release covers all of them.
 
+## 3.10.5 - 2026-10-22
+
+Listener hostname, per-route body and query parsers, declared route status
+
+A 204 or 304 response is now always sent without a body, even when the
+handler returns a value.
+
+### Features
+
+- **examples**: use listener hostname and a route bodyParser in examples/full ([`61b6f41`](https://github.com/petarzarkov/dunx/commit/61b6f4163e7e0d2656681633d2c44f546c40f051))
+- **http**: support per-route body and query parsers ([`1e887bc`](https://github.com/petarzarkov/dunx/commit/1e887bcf4fbc66e235f5d2f31627b1c4cf636882))
+- **http**: configure hostname for HTTP and gateway listeners ([`79ef3bb`](https://github.com/petarzarkov/dunx/commit/79ef3bbf3251da9e01b891a9a21f099379a87aa2))
+- **http**: expose declared status in route context ([`8de97d4`](https://github.com/petarzarkov/dunx/commit/8de97d443ef1f55c3f2625fa959d03a48a970239))
+
+### Fixes
+
+- **http**: await an async queryParser and skip the clone on buffered bodies ([`2149827`](https://github.com/petarzarkov/dunx/commit/2149827c12b8cf4f93849776935f4fdc6da20b69))
+- **http**: keep cookies on a replayed custom-body request ([`2b571dc`](https://github.com/petarzarkov/dunx/commit/2b571dc5261e6837c327146b03b2ebcdc553d996))
+- **http**: preserve declared bodyless response statuses ([`37df30e`](https://github.com/petarzarkov/dunx/commit/37df30e2b97b38b9a453552ef430a6538be368a1))
+
+### Documentation
+
+- **mcp**: refresh controller guide corpus ([`b86fe09`](https://github.com/petarzarkov/dunx/commit/b86fe090facd3049b057605d2bf46c93e05909f5))
+
 ## 3.10.4 - 2026-10-20
 
 Bun 1.4.3, log filters, leak fixes, hot-path URL parsing
