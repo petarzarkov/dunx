@@ -10,8 +10,8 @@ import { NotesModule } from './notes/notes.module.js';
 
 /**
  * Keyset pagination over a list that is no database table, through
- * `@dunx/infra/pagination/cursor`. On its own server so `service.test.ts` stays
- * under the 800-line cap.
+ * `@dunx/infra/pagination/cursor`, and the notes routes with their own parsers.
+ * On its own server so `service.test.ts` stays under the 800-line cap.
  */
 let server: TestServer;
 let client: TestClient;
@@ -53,4 +53,39 @@ it('walks forward on the cursor the envelope handed back', async () => {
   // carries no query builder and resolves with no drizzle installed.
   expect(next.body.data[0]?.text).not.toBe(first.body.data[0]?.text);
   expect(next.body.meta.hasPreviousPage).toBe(true);
+});
+
+it('adds a note from a text/plain body through the route bodyParser', async () => {
+  const plain = (body: string, type = 'text/plain') =>
+    client.json<string[]>('notes/plain', {
+      method: 'POST',
+      headers: { 'content-type': type },
+      body,
+    });
+
+  const created = await plain('  from a plain body \n');
+  expect(created.status).toBe(201);
+  expect(created.body).toContain('from a plain body');
+
+  // The parser owns media-type acceptance, and `CreateNote` still validates.
+  expect(
+    (await plain('with a charset', 'text/plain; charset=utf-8')).status,
+  ).toBe(201);
+  expect((await plain('{"text":"json"}', 'application/json')).status).toBe(415);
+  expect((await plain('near miss', 'text/plain-extra')).status).toBe(415);
+  expect((await plain('   ')).status).toBe(400);
+});
+
+it('reads a nested filter through the route queryParser', async () => {
+  await client.json('notes/plain', {
+    method: 'POST',
+    headers: { 'content-type': 'text/plain' },
+    body: 'needle in a note',
+  });
+
+  const found = await client.json<string[]>('notes/search?filter[text]=needle');
+  expect(found.status).toBe(200);
+  expect(found.body).toEqual(['needle in a note']);
+
+  expect((await client.json('notes/search?text=needle')).status).toBe(400);
 });

@@ -27,6 +27,8 @@ import type { SecurityHeadersOptions } from './security-headers.js';
  */
 export interface HttpOptions extends AppOptions {
   readonly port?: number;
+  /** Interface to bind on both HTTP and gateway listeners. Omit for Bun's default. */
+  readonly hostname?: string | undefined;
   /**
    * Prefixes every discovered route, the same thing {@link HttpApp.setGlobalPrefix}
    * does. Both exist: the method is what NestJS offers and what a script reaches
