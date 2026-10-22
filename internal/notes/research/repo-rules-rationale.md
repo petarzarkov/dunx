@@ -520,9 +520,10 @@ Every package manifest needs `"type": "module"`. Without it,
 - **Linter**: `oxlint` (config: `.oxlintrc.json` at repo root)
 - **Formatter**: `bun fmt` (config: `.oxfmtrc.json`), from Bun 1.4.4. The oxfmt
   package is gone; its config file stays because it is what makes `bun fmt` print
-  oxfmt 0.72's output. The same options as a `[fmt]` section in `bunfig.toml`
-  switch it to Prettier's printer, which reformatted 26 files on 1.4.4: unions
-  joined onto one line, and Markdown list continuations dedented.
+  oxfmt 0.72's output. Deleting it and moving the same options into a `[fmt]`
+  section in `bunfig.toml` switches to Prettier's printer, which reformatted 26
+  files on 1.4.4: unions joined onto one line, and Markdown list continuations
+  dedented. While `.oxfmtrc.json` exists, `[fmt]` does not change the printer.
 - **Why oxlint stays.** Bun 1.4.4 carries `bun lint`, oxlint-compatible and reading
   `.oxlintrc.json`, but compiles it into canary builds only (oven-sh/bun#46438), so
   `bun lint` on a release falls through to the `lint` script. Revisit when a
