@@ -40,6 +40,19 @@ That is the whole command. `HttpFactory.create` builds the container,
 process open. There is no cluster module to configure, see the note on
 horizontal scaling below.
 
+## Binding a network interface
+
+Set `hostname` to choose the interface passed to `Bun.serve`:
+
+```ts
+await HttpFactory.create(AppModule, { hostname: '127.0.0.1' });
+```
+
+The same hostname applies to the main listener and a separate `gatewayPort`
+listener. Omit it to keep Bun's default. Applications that configure HTTP through
+the container can override the `HttpOptionsProvider.hostname` getter; a value
+passed directly to `create` takes precedence.
+
 ## HTTP/2
 
 `http2: true` serves HTTP/2 on the same port as HTTP/1.1, through the same routes

@@ -102,6 +102,11 @@ export abstract class HttpOptionsProvider {
     return undefined;
   }
 
+  /** Interface to bind. `undefined` preserves Bun's default. */
+  get hostname(): string | undefined {
+    return undefined;
+  }
+
   /** Off by default. See {@link HttpOptions.versioning}. */
   get versioning(): VersioningOptions | undefined {
     return undefined;
@@ -226,6 +231,7 @@ export function resolveHttpOptions(
     relayChannel: settings.relayChannel,
     prefix: settings.prefix,
     port: settings.port,
+    hostname: settings.hostname,
     cors: settings.cors,
     versioning: settings.versioning,
     securityHeaders: settings.securityHeaders,
