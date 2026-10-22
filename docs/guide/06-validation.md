@@ -447,6 +447,6 @@ validation errors.
 
 Custom body parsing preserves request-body logging and can read bytes already
 buffered by middleware such as the idempotency guard. In that case the parser
-receives a replayable request with the original URL, method, headers, signal and
-route params; arbitrary properties attached by middleware are not copied.
+receives a replayable request with the original URL, method, headers, signal,
+cookies and route params; arbitrary properties attached by middleware are not copied.
 Routes without parser options retain the built-in parsers.

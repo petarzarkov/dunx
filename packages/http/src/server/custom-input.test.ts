@@ -19,7 +19,7 @@ const request = (body = 'hello'): BunRequest =>
       headers: { 'content-type': 'application/octet-stream' },
       body,
     }),
-    { params: { id: '7' } },
+    { params: { id: '7' }, cookies: new Bun.CookieMap('session=abc') },
   ) as unknown as BunRequest;
 
 const custom = {
@@ -137,6 +137,7 @@ it('replays a body already consumed by middleware and preserves request details'
       expect(source.url).toBe(req.url);
       expect(source.method).toBe('POST');
       expect(source.params).toEqual({ id: '7' });
+      expect(source.cookies.get('session')).toBe('abc');
       expect(source.headers.get('content-type')).toBe(
         'application/octet-stream',
       );

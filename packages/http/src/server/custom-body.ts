@@ -18,7 +18,7 @@ export const parseCustomBody = (
             body: buffered,
             signal: req.signal,
           }),
-          { params: req.params },
+          { params: req.params, cookies: req.cookies },
         ) as BunRequest);
   if (!RawBody.wanted(req)) return parse(source);
   return source

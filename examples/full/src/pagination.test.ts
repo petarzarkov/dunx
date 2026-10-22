@@ -68,6 +68,10 @@ it('adds a note from a text/plain body through the route bodyParser', async () =
   expect(created.body).toContain('from a plain body');
 
   // The parser owns media-type acceptance, and `CreateNote` still validates.
+  expect(
+    (await plain('with a charset', 'text/plain; charset=utf-8')).status,
+  ).toBe(201);
   expect((await plain('{"text":"json"}', 'application/json')).status).toBe(415);
+  expect((await plain('near miss', 'text/plain-extra')).status).toBe(415);
   expect((await plain('   ')).status).toBe(400);
 });

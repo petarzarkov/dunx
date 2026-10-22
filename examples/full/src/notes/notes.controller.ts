@@ -37,7 +37,8 @@ const createNote = {
 const createPlainNote = {
   body: CreateNote,
   bodyParser: async (req: BunRequest) => {
-    if (!req.headers.get('content-type')?.startsWith('text/plain')) {
+    const media = req.headers.get('content-type')?.split(';')[0]?.trim();
+    if (media?.toLowerCase() !== 'text/plain') {
       throw new HttpError(
         HttpStatusCode.UNSUPPORTED_MEDIA_TYPE,
         'This route takes text/plain.',

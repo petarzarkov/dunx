@@ -45,7 +45,8 @@ horizontal scaling below.
 Set `hostname` to choose the interface passed to `Bun.serve`:
 
 ```ts
-await HttpFactory.create(AppModule, { hostname: '127.0.0.1' });
+const app = await HttpFactory.create(AppModule, { hostname: '127.0.0.1' });
+await app.listen(3000);
 ```
 
 The same hostname applies to the main listener and a separate `gatewayPort`
