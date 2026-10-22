@@ -225,15 +225,15 @@ describe('SqliteOptions.open', () => {
     await connection.close();
   });
 
-  // The reason strict defaults on: drizzle's own `drizzle('./dev.db')` path
-  // forwards no strict flag and this silent NULL is what you get.
-  it('binds the same Date as NULL when strict is off', async () => {
+  // Up to Bun 1.4.3 this bound `NULL` without a word, which is why strict defaults
+  // on: drizzle's own `drizzle('./dev.db')` path forwards no strict flag.
+  it('throws for the same Date with strict off', async () => {
     const connection = await new SqliteOptions({
       schema: {},
       strict: false,
     }).open();
 
-    expect(bindDate(connection.raw)).toEqual({ x: null });
+    expect(() => bindDate(connection.raw)).toThrow(TypeError);
     await connection.close();
   });
 

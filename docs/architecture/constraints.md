@@ -85,8 +85,9 @@ handler anywhere, an unclaimed path is Bun's native 404 and a plain `GET` on a
 gateway path is a 426.
 
 **Graceful `server.stop()` never resolves while a WebSocket is open.** `stop(true)`
-is required, and clients then observe close code 1006. An app with gateways must
-therefore force-stop on shutdown or it hangs forever.
+is required, and clients then observe close code 1001 (1006 on 1.4.3, which sent
+no close frame). An app with gateways must therefore force-stop on shutdown or it
+hangs forever.
 
 **`server.publish` reaches the sender; `socket.publish` does not** (absent
 `publishToSelf`). The two are not interchangeable.

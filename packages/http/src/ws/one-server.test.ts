@@ -236,7 +236,8 @@ describe('one Bun.serve for both', () => {
 
   // A graceful Bun stop waits for open connections and a WebSocket never closes on
   // its own, so an app with gateways has to force it. Measured: without the force
-  // this call never resolves.
+  // this call never resolves. From Bun 1.4.4 the forced stop sends a close frame,
+  // 1001 "Server closed"; 1.4.3 dropped the socket and the client saw a 1006.
   it('shuts down without hanging while a socket is still open', async () => {
     const app = await HttpFactory.create(AppModule);
     const url = await app.listen(0);
@@ -251,7 +252,7 @@ describe('one Bun.serve for both', () => {
 
     await deadline(app.shutdown(), 'shutdown with a live socket', 1500);
     expect(await deadline(closed, 'the client to see the close', 1500)).toBe(
-      1006,
+      1001,
     );
     expect(await rejectionMessage(fetch(new URL('/notes', url)))).toBeTruthy();
   });

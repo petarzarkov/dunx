@@ -139,7 +139,7 @@ export class ServerBinding {
   /**
    * `force` is for the server that owns the sockets: a graceful stop waits for
    * open connections, and a WebSocket never closes itself, so those clients see
-   * a 1006. Under a split the routes server holds none and stops gracefully, so
+   * a 1001. Under a split the routes server holds none and stops gracefully, so
    * an in-flight request there finishes rather than being cut off.
    */
   async stop(force: boolean): Promise<void> {

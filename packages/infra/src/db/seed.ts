@@ -106,8 +106,8 @@ const names = async <TSchema extends Record<string, unknown>>(
 /**
  * `IF NOT EXISTS` so this is safe on every boot. `applied_at` is written as an ISO
  * 8601 string rather than a `Date`: `bun:sqlite` has no date type and rejects - or,
- * unstrict, silently NULLs - a `Date` binding, and Postgres parses the string into
- * `timestamptz` anyway.
+ * unstrict on Bun 1.4.3, silently NULLs - a `Date` binding, and Postgres parses
+ * the string into `timestamptz` anyway.
  */
 const journal = async <TSchema extends Record<string, unknown>>(
   db: SeedableDb<TSchema>,

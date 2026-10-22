@@ -390,7 +390,7 @@ export class HttpApplication extends ShutdownAware implements HttpApp {
 
   // The server has to stop before providers tear down, so the handler lands
   // here. With a gateway the stop is forced: a graceful one waits for open
-  // connections and a WebSocket never closes itself. Those clients see a 1006.
+  // connections and a WebSocket never closes itself. Those clients see a 1001.
   /** Public so an operator can start draining without committing to a shutdown,
    * which is what a readiness probe wants during a rolling deploy. */
   drain(): Promise<void> {
