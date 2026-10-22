@@ -49,6 +49,17 @@ const createPlainNote = {
   status: HttpStatusCode.CREATED,
 } as const satisfies RouteSchemas;
 
+/**
+ * `?filter[text]=x` arrives flat as the key `filter[text]`. The parser nests it,
+ * so the schema states the shape a client means.
+ */
+const noteSearch = {
+  query: z.object({ filter: z.object({ text: z.string().min(1) }) }),
+  queryParser: (req: BunRequest) => ({
+    filter: { text: new URL(req.url).searchParams.get('filter[text]') },
+  }),
+} as const satisfies RouteSchemas;
+
 const notePage = {
   query: z.object({
     take: z.coerce
@@ -126,6 +137,12 @@ export class NotesController {
       hasPreviousPage: from > 0,
       cursorOf: (row) => encodeCursor(0, row.id),
     });
+  }
+
+  @ApiDoc({ summary: 'Notes containing a text, from a nested query' })
+  @Get('/search', noteSearch)
+  search({ query }: Input<typeof noteSearch>): readonly string[] {
+    return this.notes.rows().filter((row) => row.includes(query.filter.text));
   }
 
   @Post('/', createNote)

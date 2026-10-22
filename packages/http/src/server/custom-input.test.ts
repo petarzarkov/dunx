@@ -82,6 +82,15 @@ it('keeps a custom query parser and synchronous validator synchronous', () => {
   expect(result).toHaveProperty('query', { text: 'query' });
 });
 
+it('awaits an asynchronous query parser before validating', async () => {
+  const result = buildInputReader({
+    query: Note,
+    queryParser: async (req) => custom.queryParser(req),
+  })(request());
+  expect(result).toBeInstanceOf(Promise);
+  expect(await result).toHaveProperty('query', { text: 'query' });
+});
+
 it('validates parser output, including asynchronous schemas', async () => {
   await expect(
     buildInputReader({ body: Note, bodyParser: () => ({ text: 7 }) })(

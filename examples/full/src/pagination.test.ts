@@ -10,7 +10,7 @@ import { NotesModule } from './notes/notes.module.js';
 
 /**
  * Keyset pagination over a list that is no database table, through
- * `@dunx/infra/pagination/cursor`, and the notes route with its own body parser.
+ * `@dunx/infra/pagination/cursor`, and the notes routes with their own parsers.
  * On its own server so `service.test.ts` stays under the 800-line cap.
  */
 let server: TestServer;
@@ -74,4 +74,18 @@ it('adds a note from a text/plain body through the route bodyParser', async () =
   expect((await plain('{"text":"json"}', 'application/json')).status).toBe(415);
   expect((await plain('near miss', 'text/plain-extra')).status).toBe(415);
   expect((await plain('   ')).status).toBe(400);
+});
+
+it('reads a nested filter through the route queryParser', async () => {
+  await client.json('notes/plain', {
+    method: 'POST',
+    headers: { 'content-type': 'text/plain' },
+    body: 'needle in a note',
+  });
+
+  const found = await client.json<string[]>('notes/search?filter[text]=needle');
+  expect(found.status).toBe(200);
+  expect(found.body).toEqual(['needle in a note']);
+
+  expect((await client.json('notes/search?text=needle')).status).toBe(400);
 });

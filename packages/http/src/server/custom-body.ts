@@ -21,6 +21,11 @@ export const parseCustomBody = (
           { params: req.params, cookies: req.cookies },
         ) as BunRequest);
   if (!RawBody.wanted(req)) return parse(source);
+  // Bytes already in hand are decoded directly, sparing the ~20 us clone.
+  if (buffered !== undefined) {
+    RawBody.record(req, new TextDecoder().decode(buffered));
+    return parse(source);
+  }
   return source
     .clone()
     .text()

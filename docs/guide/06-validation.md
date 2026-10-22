@@ -435,9 +435,9 @@ const customText = {
 } as const satisfies RouteSchemas;
 ```
 
-Import `BunRequest` from `bun`. The body parser may return a value or a promise;
-the query parser returns a value synchronously. Both receive the request and
-return the value for their schema to validate.
+Import `BunRequest` from `bun`. Either parser may return a value or a promise; a
+synchronous query parser keeps a route without a body free of promises. Both
+receive the request and return the value for their schema to validate.
 
 Custom body parsers choose which
 content types to accept; the built-in media-type dispatch is bypassed. Throw an

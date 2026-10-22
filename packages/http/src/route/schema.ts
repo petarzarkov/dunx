@@ -31,7 +31,10 @@ export interface RouteSchemas {
   /** Overrides body decoding before validation. Used only with a body schema. */
   readonly bodyParser?: (req: BunRequest) => unknown;
   readonly query?: StandardSchemaV1;
-  /** Overrides query decoding before validation. Used only with a query schema. */
+  /**
+   * Overrides query decoding before validation. Used only with a query schema. A
+   * synchronous parser keeps the reader synchronous; a promise is awaited.
+   */
   readonly queryParser?: (req: BunRequest) => unknown;
   readonly params?: StandardSchemaV1;
   /** Overrides the default success status: 201 for POST, 200 otherwise. */

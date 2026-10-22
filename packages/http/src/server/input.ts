@@ -240,7 +240,15 @@ export const buildInputReader = (
     fills.push(
       parse === undefined
         ? queryFill(schema)
-        : (draft) => fillWith(draft, 'query', schema, parse(draft.req)),
+        : (draft) => {
+            // Synchronous parsers keep the reader synchronous; a promise is awaited.
+            const value = parse(draft.req);
+            return value instanceof Promise
+              ? value.then((settled) =>
+                  fillWith(draft, 'query', schema, settled),
+                )
+              : fillWith(draft, 'query', schema, value);
+          },
     );
   }
   if (options?.params !== undefined) fills.push(paramsFill(options.params));
