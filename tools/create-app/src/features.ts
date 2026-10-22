@@ -29,11 +29,10 @@ export interface Feature {
 }
 
 /**
- * Config groups, keyed by the name a feature asks for. `env` is what lands in
- * `.env.example`, `schema` the zod line, `field` the `AppConfig` member and `map`
- * how the flat variable becomes the shaped one - the four things
- * `examples/full/src/config.ts` states for every group at once, split so a
- * selection can state only its own.
+ * Config groups, keyed by the name a feature asks for. `env` lands in
+ * `.env.example`, `schema` is the zod line, `field` the `AppConfig` member and
+ * `map` how the flat variable becomes the shaped one: what `examples/full`'s
+ * `config.ts` states for every group at once, split so a selection states its own.
  */
 interface ConfigGroup {
   readonly schema: readonly string[];
@@ -47,9 +46,10 @@ export const CONFIG_GROUPS: Readonly<Record<string, ConfigGroup>> =
     port: {
       schema: [
         'PORT: z.coerce.number().int().min(0).max(65535).default(3000),',
+        'HOST: z.string().min(1).optional(),',
       ],
-      field: 'readonly port: number;',
-      map: 'port: value.PORT,',
+      field: 'readonly port: number;\n  readonly hostname: string | undefined;',
+      map: 'port: value.PORT,\n    hostname: value.HOST,',
       env: [{ name: 'PORT', value: '3000' }],
     },
     publicUrl: {

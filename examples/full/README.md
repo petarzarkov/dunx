@@ -240,6 +240,7 @@ loads `.env` and `.env.local` itself, so there is no loader and no `dotenv`.
 | Variable        | Default                 | Effect                                   |
 | --------------- | ----------------------- | ------------------------------------------ |
 | `PORT`          | `3000`                  | where it listens                          |
+| `HOST`          | Bun's default           | the interface it binds                    |
 | `LOG_LEVEL`     | `info`                  | `verbose`…`fatal`                         |
 | `LOG_FILE`      | _unset_                 | also append rotating JSON to this path    |
 | `DATABASE_FILE` | `:memory:`              | a path makes the ledger survive restarts  |

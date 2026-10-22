@@ -33,6 +33,8 @@ export interface ConfigFile {
  */
 const envSchema = z.object({
   PORT: z.coerce.number().int().min(0).max(65535).default(3000),
+  /** Unset keeps Bun's default interface. `127.0.0.1` behind a local proxy. */
+  HOST: z.string().min(1).optional(),
   LOG_LEVEL: z.enum(LogLevel).default(LogLevel.INFO),
   /** Unset means console only. Set it to also append JSON to a rotating file. */
   LOG_FILE: z.string().optional(),
@@ -142,6 +144,7 @@ export const RELAY_CHANNEL = 'dunx-full:ws';
 export interface AppConfig {
   readonly appName: string;
   readonly port: number;
+  readonly hostname: string | undefined;
   readonly corsOrigin: string;
   readonly trustProxy: boolean;
   readonly seedUsers: readonly string[];
@@ -219,6 +222,7 @@ export const validate = (env: ConfigValues): AppConfig => {
   return {
     appName: value.appName,
     port: value.PORT,
+    hostname: value.HOST,
     corsOrigin: value.CORS_ORIGIN,
     trustProxy: value.TRUST_PROXY,
     seedUsers: value.seed.users,

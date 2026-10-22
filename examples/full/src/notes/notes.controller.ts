@@ -1,7 +1,9 @@
+import type { BunRequest } from 'bun';
 import {
   ClientAddress,
   Controller,
   Get,
+  HttpError,
   HttpStatusCode,
   Post,
   type Input,
@@ -25,6 +27,24 @@ const CreateNote = z
 // An explicit status, unlike the users controller which takes the POST default.
 const createNote = {
   body: CreateNote,
+  status: HttpStatusCode.CREATED,
+} as const satisfies RouteSchemas;
+
+/**
+ * A `text/plain` body, decoded by the route rather than the built-in JSON reader.
+ * The parser owns media-type acceptance; `CreateNote` still validates its output.
+ */
+const createPlainNote = {
+  body: CreateNote,
+  bodyParser: async (req: BunRequest) => {
+    if (!req.headers.get('content-type')?.startsWith('text/plain')) {
+      throw new HttpError(
+        HttpStatusCode.UNSUPPORTED_MEDIA_TYPE,
+        'This route takes text/plain.',
+      );
+    }
+    return { text: (await req.text()).trim() };
+  },
   status: HttpStatusCode.CREATED,
 } as const satisfies RouteSchemas;
 
@@ -109,6 +129,12 @@ export class NotesController {
 
   @Post('/', createNote)
   create({ body }: Input<typeof createNote>): readonly string[] {
+    return this.notes.add(body.text);
+  }
+
+  @ApiDoc({ summary: 'Add a note from a plain-text body' })
+  @Post('/plain', createPlainNote)
+  createPlain({ body }: Input<typeof createPlainNote>): readonly string[] {
     return this.notes.add(body.text);
   }
 }

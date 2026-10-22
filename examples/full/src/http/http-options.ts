@@ -42,6 +42,11 @@ export class AppHttpOptions extends HttpOptionsProvider {
    */
   override readonly trustProxy: boolean;
 
+  /** Both the HTTP listener and a separate `gatewayPort` one bind here. */
+  override get hostname(): string | undefined {
+    return this.config.get('hostname');
+  }
+
   override get prefix(): string {
     return 'api';
   }
