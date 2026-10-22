@@ -66,7 +66,9 @@ export const connect = async (base: string, path = 'chat'): Promise<Client> => {
       }),
     send: (event, data) => socket.send(JSON.stringify({ event, data })),
     sendRaw: (frame) => socket.send(frame),
-    close: () => socket.close(),
+    // A bare `close()` sends no status, which the server reads as 1005 from Bun
+    // 1.4.4 (1.4.3 reported 1000). A demo that means "done" says so.
+    close: () => socket.close(1000),
     received,
   };
 };

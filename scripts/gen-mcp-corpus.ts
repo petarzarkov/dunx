@@ -236,7 +236,7 @@ const readScaffold = (): readonly ScaffoldFeature[] =>
 /**
  * `JSON.parse` of one string literal rather than an object literal spanning ten
  * thousand lines: it keeps the file at thirteen lines, which is what keeps `max-lines`
- * and `oxfmt` from having an opinion about generated data. Bun parses the whole
+ * and `bun fmt` from having an opinion about generated data. Bun parses the whole
  * corpus in under a millisecond.
  */
 const literal = (value: unknown): string =>

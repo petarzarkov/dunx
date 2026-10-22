@@ -518,7 +518,16 @@ Every package manifest needs `"type": "module"`. Without it,
 ## Linting & Formatting
 
 - **Linter**: `oxlint` (config: `.oxlintrc.json` at repo root)
-- **Formatter**: `oxfmt` (config: `.oxfmtrc.json`)
+- **Formatter**: `bun fmt` (config: `.oxfmtrc.json`), from Bun 1.4.4. The oxfmt
+  package is gone; its config file stays because it is what makes `bun fmt` print
+  oxfmt 0.72's output. Deleting it and moving the same options into a `[fmt]`
+  section in `bunfig.toml` switches to Prettier's printer, which reformatted 26
+  files on 1.4.4: unions joined onto one line, and Markdown list continuations
+  dedented. While `.oxfmtrc.json` exists, `[fmt]` does not change the printer.
+- **Why oxlint stays.** Bun 1.4.4 carries `bun lint`, oxlint-compatible and reading
+  `.oxlintrc.json`, but compiles it into canary builds only (oven-sh/bun#46438), so
+  `bun lint` on a release falls through to the `lint` script. Revisit when a
+  release ships it.
 - Repo-local rules live in `scripts/oxlint-plugin.js`, wired via `jsPlugins`. oxlint
   has no `no-restricted-syntax`, so anything syntax-shaped goes there. Currently:
   `dunx/no-enum` and `dunx/no-brand-prefix`.
@@ -542,7 +551,7 @@ Every package manifest needs `"type": "module"`. Without it,
   and no lint-staged.** `prepare` runs the script, which writes `pre-commit` and
   `pre-push` into the repository's hooks directory; `.stagelint.yml` says what
   runs over the staged files.
-  - Its entries are the **bare binaries** (`oxlint --fix`, `oxfmt`), not
+  - Its entries are the **bare tools** (`oxlint --fix`, `bun fmt`), not
     `bun run lint` / `bun run format` - those end in `.`, and the staged paths are
     _appended_, so `oxlint --fix . <files>` linted the whole repo on every commit
     and failed on unrelated pre-existing errors. That trap is unchanged.

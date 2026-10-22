@@ -534,8 +534,10 @@ with gateways force-stops:
 await this.#server?.stop(this.#websocket !== undefined);
 ```
 
-Those clients observe close code **1006**. There is no way around it without
-hanging, and an app that hangs on `SIGTERM` gets `SIGKILL` anyway.
+Those clients receive close code **1001** with the reason `Server closed`. On Bun
+1.4.3 the socket was dropped instead and they observed **1006**. Either way there
+is no graceful close without hanging, and an app that hangs on `SIGTERM` gets
+`SIGKILL` anyway.
 
 `PubSub.close()` runs **before** the container shuts down, and closes the two
 Redis sockets of a relay the app owns. Nothing else closes them.

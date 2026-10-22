@@ -214,10 +214,10 @@ describe('Date bindings', () => {
   });
 
   /**
-   * A *single* object binding is read as a named-parameter map instead, and that
-   * is the case `strict: true` exists for: strict rejects it, non-strict writes
-   * `NULL` and says nothing. Measured on Bun 1.3.14, which is why this package
-   * defaults `strict` on even though the driver does not.
+   * A *single* object binding is read as a named-parameter map instead. Up to Bun
+   * 1.4.3 that was the case `strict: true` existed for: strict rejected it with
+   * "Missing parameter" and non-strict wrote `NULL` and said nothing. 1.4.4 refuses
+   * it with the same `TypeError` as the positional case, whatever strict says.
    */
   it('refuses a lone raw Date under the default strict', () => {
     let cause: unknown;
@@ -227,17 +227,17 @@ describe('Date bindings', () => {
       // drizzle rewraps the driver's failure; the driver's own words are the cause.
       cause = (error as { cause?: unknown }).cause;
     }
-    expect(cause).toBeInstanceOf(Error);
-    expect((cause as Error).message).toContain('Missing parameter');
+    expect(cause).toBeInstanceOf(TypeError);
+    expect((cause as Error).message).toContain('Binding expected');
   });
 
-  it('silently writes NULL for the same binding when strict is off', async () => {
+  it('refuses the same binding when strict is off', async () => {
     const loose = await new SqliteOptions({ schema, strict: false }).open();
     loose.db.run(sql`CREATE TABLE stamps (at TEXT)`);
-    loose.db.run(sql`INSERT INTO stamps (at) VALUES (${new Date()})`);
-    expect(
-      loose.db.all<{ at: string | null }>(sql`SELECT at FROM stamps`),
-    ).toEqual([{ at: null }]);
+    expect(() =>
+      loose.db.run(sql`INSERT INTO stamps (at) VALUES (${new Date()})`),
+    ).toThrow();
+    expect(loose.db.all(sql`SELECT at FROM stamps`)).toEqual([]);
     await loose.close();
   });
 });

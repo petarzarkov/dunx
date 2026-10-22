@@ -153,3 +153,8 @@ than the failure the original four described. The evidence is in
 pg-boss writes its own `$n::type` casts, so `sql.array()` does not close the gap for
 it. Those two closing is still what turns the queue adapter from a driver-compat
 layer into `executeSql` plus `listen`, which is the size worth owning.
+
+**Bun 1.4.4 closes the array half** (oven-sh/bun#45304 fixes #41242): a raw array
+binds under `$1::text[]` and `$1::int[]`, which is the form pg-boss writes. #40942 is
+listed there as "not changed" and still reproduces, so one of the two gaps remains.
+The pg-boss shim is not re-measured against 1.4.4 yet.

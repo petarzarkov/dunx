@@ -40,10 +40,18 @@ const hooks = join(
  */
 const BIN = '"$(git rev-parse --show-toplevel)/node_modules/.bin"';
 
+/**
+ * Both hooks run `bun fmt`, and `bun` is never in node_modules/.bin. A GUI git
+ * client can start the hook with a PATH that lacks Bun's install directory, so
+ * fall back to it rather than fail every commit and push with exit 127.
+ */
+const BUN_ON_PATH =
+  'command -v bun >/dev/null 2>&1 || PATH="${BUN_INSTALL:-$HOME/.bun}/bin:$PATH"';
+
 const PRE_COMMIT = `#!/usr/bin/env sh
 # Managed by scripts/install-hooks.ts. Edit that, not this.
 #
-# stagelint runs oxlint and oxfmt over the staged files per .stagelint.yml. It
+# stagelint runs oxlint and bun fmt over the staged files per .stagelint.yml. It
 # three-way merges a formatter's rewrite into a partially staged file, so an
 # unstaged edit in the same file no longer blocks the commit the way lint-staged
 # did.
@@ -53,6 +61,7 @@ const PRE_COMMIT = `#!/usr/bin/env sh
 # fails with "No such file or directory". It keeps .stagelint.yml readable as
 # bare binary names.
 PATH="$(git rev-parse --show-toplevel)/node_modules/.bin:$PATH"
+${BUN_ON_PATH}
 export PATH
 exec ${BIN}/stagelint "$@"
 `;
@@ -62,17 +71,21 @@ const PRE_PUSH = `#!/usr/bin/env sh
 #
 # pre-commit only sees staged files, so an unformatted file can still reach CI
 # and fail \`bun run format:check\`. Catch it here instead.
-# The status is checked before the emptiness: oxfmt failing with no output would
-# otherwise read as "nothing to format" and let the push through.
-if ! unformatted=$(${BIN}/oxfmt --list-different .); then
-  echo "pre-push: oxfmt --list-different failed, so nothing was checked."
+# \`bun fmt --list-different\` exits 1 when it lists files and 2 when it fails, so
+# only 1 with a list means "unformatted". A Bun older than 1.4.4 has no \`bun fmt\`
+# and exits 1 with nothing listed.
+${BUN_ON_PATH}
+unformatted=$(bun fmt --list-different)
+status=$?
+[ "$status" -eq 0 ] && exit 0
+
+if [ "$status" -ne 1 ] || [ -z "$unformatted" ]; then
+  echo "pre-push: bun fmt --list-different failed, so nothing was checked."
   exit 1
 fi
 
-[ -z "$unformatted" ] && exit 0
-
-if ! ${BIN}/oxfmt --write . >/dev/null; then
-  echo "pre-push: these files are not formatted, and oxfmt could not fix them:"
+if ! bun fmt >/dev/null; then
+  echo "pre-push: these files are not formatted, and bun fmt could not fix them:"
   echo "$unformatted" | sed 's/^/  /'
   exit 1
 fi
@@ -80,7 +93,7 @@ fi
 echo "pre-push: these files were not formatted, and CI would have failed on them:"
 echo "$unformatted" | sed 's/^/  /'
 echo ""
-echo "oxfmt has now fixed them in your working tree. Commit the change, then push again."
+echo "bun fmt has now fixed them in your working tree. Commit the change, then push again."
 exit 1
 `;
 

@@ -38,9 +38,9 @@ export interface SqliteInit<
   readonly create?: boolean;
   /**
    * Default `true`, unlike the driver - and unlike what drizzle opens for you.
-   * Strict mode turns an unsupported binding into a `TypeError` instead of a
-   * silent `NULL`, which is what a raw `Date` in a `sql` template would otherwise
-   * become.
+   * On Bun 1.4.3 strict mode is what turns an unsupported binding into a
+   * `TypeError` instead of a silent `NULL`, which is what a raw `Date` in a `sql`
+   * template would otherwise become. 1.4.4 throws either way.
    */
   readonly strict?: boolean;
   /** Return integers as `bigint` rather than truncating to 53 bits. */

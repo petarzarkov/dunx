@@ -317,7 +317,7 @@ jobs:
           # bypass applies to it. No extra CI run follows: the commit message
           # carries [skip ci].
           GITHUB_TOKEN: ${{ secrets.RELEASE_TOKEN }}
-          # Husky's pre-push hook refuses any push oxfmt would change, and what gets
+          # The pre-push hook refuses any push bun fmt would change, and what gets
           # pushed here is this script's own generated commit. CI already ran
           # format:check over the source, so the hook can only produce a false
           # negative, which it did on 2.2.0: it blocked a release that had already
