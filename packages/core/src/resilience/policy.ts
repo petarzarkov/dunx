@@ -9,11 +9,16 @@ import type { ResilienceOptions } from './options.js';
 const unbounded = new AbortController().signal;
 
 /**
- * Timeout, retry, backoff, jitter and fallback around one operation.
+ * Timeout, retry, backoff, jitter, fallback, and optionally a circuit breaker and
+ * a bulkhead, around one operation.
  *
- * There is no circuit breaker and no bulkhead here, and no rate limiter: inbound
- * admission control is `ThrottleModule` in `@dunx/http`, and retrying work this
- * process owns is bullmq's through `@dunx/infra/queue`.
+ * Outermost first: the bulkhead admits the call, the retry loop runs attempts,
+ * the breaker admits each attempt, and the timeout bounds it. `fallback` answers
+ * a refusal from either the same way it answers a spent budget.
+ *
+ * There is no rate limiter: inbound admission control is `ThrottleModule` in
+ * `@dunx/http`, and retrying work this process owns is bullmq's through
+ * `@dunx/infra/queue`.
  */
 export class ResiliencePolicy {
   constructor(private readonly options: ResilienceOptions) {}
@@ -34,7 +39,18 @@ export class ResiliencePolicy {
    * end, which is seconds past the bound for some and never for others.
    */
   async run<T>(op: (signal: AbortSignal) => Promise<T>): Promise<T> {
-    return this.#attempts(op);
+    const { bulkhead, signal } = this.options;
+    if (bulkhead === undefined) return this.#attempts(op);
+    try {
+      await bulkhead.acquire(signal);
+    } catch (error) {
+      return this.#fallback(error);
+    }
+    try {
+      return await this.#attempts(op);
+    } finally {
+      bulkhead.release();
+    }
   }
 
   /**
@@ -56,12 +72,17 @@ export class ResiliencePolicy {
       onError,
       onSuccess,
     } = this.options.retry;
-    const { fallback } = this.options;
+    const { breaker } = this.options;
 
     // No terminating condition: every path out is a return or a throw, so a
     // counted loop would end on a line no test can reach.
     for (let attempt = 0; ; attempt += 1) {
       onAttempt?.(attempt + 1, attempt > 0);
+      // After `onAttempt`, so a throwing hook cannot strand a half-open probe
+      // the breaker would then hold forever.
+      const signal = this.#signal();
+      const refused = breaker?.admit();
+      if (refused !== undefined) return this.#fallback(refused);
       // The binding is outer, and `onSuccess` and the return sit **after** the
       // try, so a throwing success hook is not caught by the attempt's own
       // `catch`. Moving either inside classifies the hook's error as a failed
@@ -70,8 +91,9 @@ export class ResiliencePolicy {
       // reverted by the test that names it.
       let result: T;
       try {
-        result = await op(this.#signal());
+        result = await op(signal);
       } catch (error) {
+        breaker?.failure(error);
         const verdict = this.#decide(error, attempt);
         const willRetry = verdict.retry && attempt < maxRetries;
         onError?.(error, attempt + 1, willRetry);
@@ -81,14 +103,20 @@ export class ResiliencePolicy {
           await Bun.sleep(verdict.delayMs);
           continue;
         }
-        if (fallback === undefined) throw error;
-        // A policy is shared across operations of different result types, so its
-        // fallback cannot be typed per call.
-        return (await fallback(error)) as T;
+        return this.#fallback(error);
       }
+      breaker?.success();
       onSuccess?.(result, attempt + 1);
       return result;
     }
+  }
+
+  async #fallback<T>(error: unknown): Promise<T> {
+    const { fallback } = this.options;
+    if (fallback === undefined) throw error;
+    // A policy is shared across operations of different result types, so its
+    // fallback cannot be typed per call.
+    return (await fallback(error)) as T;
   }
 
   #decide(

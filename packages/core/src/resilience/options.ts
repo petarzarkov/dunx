@@ -1,4 +1,6 @@
 import type { BackoffOptions } from './backoff.js';
+import type { CircuitBreaker } from './breaker.js';
+import type { Bulkhead } from './bulkhead.js';
 import { RetryClassifier, TransientRetryClassifier } from './classifier.js';
 
 export interface RetryOptions<T = unknown> {
@@ -31,6 +33,16 @@ export interface ResilienceOptionsInit {
    */
   readonly fallback?: (error: unknown) => unknown;
   /**
+   * Asked before every attempt and told how each one went. An instance, so one
+   * breaker per dependency is shared by every policy calling it.
+   */
+  readonly breaker?: CircuitBreaker;
+  /**
+   * Held for the whole call, retries and backoff included, so `maxConcurrent`
+   * counts calls rather than attempts. Shared the same way as `breaker`.
+   */
+  readonly bulkhead?: Bulkhead;
+  /**
    * A caller's own cancellation, combined with each attempt's timeout. Per call
    * rather than per policy, so a policy carrying one is built per call:
    * `HttpService` does that, and a module-bound policy leaves it out.
@@ -50,6 +62,8 @@ export class ResilienceOptions {
   readonly retry: RetryOptions;
   readonly classifier: RetryClassifier;
   readonly fallback: ((error: unknown) => unknown) | undefined;
+  readonly breaker: CircuitBreaker | undefined;
+  readonly bulkhead: Bulkhead | undefined;
   readonly signal: AbortSignal | undefined;
   readonly name: string | undefined;
 
@@ -58,6 +72,8 @@ export class ResilienceOptions {
     this.retry = init.retry ?? {};
     this.classifier = init.classifier ?? new TransientRetryClassifier();
     this.fallback = init.fallback;
+    this.breaker = init.breaker;
+    this.bulkhead = init.bulkhead;
     this.signal = init.signal;
     this.name = init.name;
   }

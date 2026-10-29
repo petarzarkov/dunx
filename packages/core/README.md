@@ -56,7 +56,7 @@ preload = ["@dunx/transform/preload"]
 | Logging       | The `Logger` contract and `ConsoleLogger`                    | [Logging](../../docs/guide/13-logging.md)              |
 | Events        | `EventBus`, `AppEvent`, `@OnEvent`, `EventRegistry`          | [Events](../../docs/guide/27-events.md)                |
 | Stats         | `Durations`, `Counter`, `Gauge`, `RuntimeStats`, `EventLoopLag` | [Metrics](../../docs/guide/24-metrics.md)           |
-| Resilience    | `ResiliencePolicy`, timeout, retry, backoff, jitter, fallback | [Resilience](../../docs/guide/26-resilience.md)       |
+| Resilience    | `ResiliencePolicy`, timeout, retry, backoff, jitter, fallback, `CircuitBreaker`, `Bulkhead` | [Resilience](../../docs/guide/26-resilience.md)       |
 | Tracing       | The `Tracer` contract, `NoopTracer`, and `OtelModule` on `/otel` | [Tracing](../../docs/guide/31-tracing.md)          |
 
 ## Subpaths

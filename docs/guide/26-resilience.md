@@ -1,10 +1,11 @@
 # Resilience
 
-Timeout, retry, exponential backoff, jitter and fallback around one operation.
-`ResiliencePolicy` lives in `@dunx/core`, has no dependency, and wraps anything
-that returns a promise: an outbound call, a driver query, a broker publish.
+Timeout, retry, exponential backoff, jitter and fallback around one operation,
+with an optional circuit breaker and bulkhead. `ResiliencePolicy` lives in
+`@dunx/core`, has no dependency, and wraps anything that returns a promise: an
+outbound call, a driver query, a broker publish.
 
-There is no circuit breaker, bulkhead or rate limiter. For related needs:
+There is no rate limiter. For related needs:
 
 | Need                                     | Use                                                                           |
 | ---------------------------------------- | ----------------------------------------------------------------------------- |
@@ -196,6 +197,73 @@ ResilienceModule.forRoot({
 
 It may be async, and it may throw, which replaces the failure rather than
 suppressing it. Without a `fallback` the last error is rethrown.
+
+## Stopping calls to a dependency that keeps failing
+
+A `CircuitBreaker` counts consecutive failed attempts and opens at
+`failureThreshold`. While open, every attempt is refused with a
+`CircuitOpenError` without running. After `openMs` it lets `halfOpenProbes`
+attempts through: one that resolves closes it, and one that fails opens it again.
+
+```ts
+import { CircuitBreaker, ResilienceModule } from '@dunx/core';
+import { FetchError } from '@dunx/http/client';
+
+ResilienceModule.forRoot({
+  retry: { maxRetries: 3 },
+  breaker: new CircuitBreaker({
+    failureThreshold: 5,
+    openMs: 30_000,
+    isFailure: (error) => !(error instanceof FetchError) || error.status >= 500,
+    onStateChange: (to, from) => log.warn({ breaker: to, from }),
+  }),
+  fallback: () => ({ cached: true }),
+});
+```
+
+The breaker is an instance rather than options because its state has to outlive
+a policy. Build one per dependency and pass it to every policy that calls that
+dependency, including policies built per call.
+
+- **The retry loop sits outside the breaker.** The attempt after the one that
+  opened the circuit is refused, so a retry loop does not keep calling a
+  dependency the breaker has given up on.
+- **`isFailure` decides what counts.** An error it declines leaves the circuit
+  as it is. The default counts everything except an `AbortError`, which is the
+  caller giving up. A `TimeoutError` counts.
+- **The state is per process.** Each replica opens on its own failures. Keeping
+  it in Redis would put a network call in front of every attempt, during the
+  outage the breaker exists for.
+
+`fallback` answers a `CircuitOpenError` like any other failure. Without one, the
+error is raised, and it carries `status: 503`.
+
+## Capping concurrent calls
+
+A `Bulkhead` limits how many calls run at once, so a slow dependency cannot hold
+every connection in the process:
+
+```ts
+import { Bulkhead, ResilienceModule } from '@dunx/core';
+
+ResilienceModule.forRoot({
+  timeoutMs: 2_000,
+  bulkhead: new Bulkhead({ maxConcurrent: 10, maxQueued: 20 }),
+});
+```
+
+A call holds one slot from start to finish, retries and backoff included. Past
+`maxConcurrent` it waits in arrival order, and past `maxQueued` it is rejected
+with a `BulkheadRejectedError` (`status: 503`), which `fallback` answers like any
+other failure.
+
+`maxQueued` defaults to `0`, which rejects as soon as the slots are full. A
+waiting call gives up when the policy's `signal` aborts, and the slot is
+released however the call ends.
+
+Like the breaker, a bulkhead is an instance shared by the policies that should
+count against one cap, and it is per process: it protects this process's sockets
+and memory.
 
 ## The outbound client already uses one
 
