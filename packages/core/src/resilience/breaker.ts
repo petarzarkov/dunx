@@ -2,9 +2,30 @@ import { AppError } from '../di/errors.js';
 
 export type CircuitState = 'closed' | 'open' | 'half-open';
 
+export interface FailureRate {
+  /** The share of attempts in the window that opens the circuit, above 0 and at most 1. */
+  readonly ratio: number;
+  /** How many of the most recent attempts the ratio is taken over. */
+  readonly window: number;
+  /**
+   * Attempts recorded before the ratio is trusted, so one failure out of one
+   * does not open it. At most `window`. @default window
+   */
+  readonly minimumCalls?: number;
+}
+
 export interface CircuitBreakerOptions {
-  /** Consecutive failures that open the circuit. @default 5 */
+  /**
+   * Consecutive failures that open the circuit. @default 5, or off when only
+   * `failureRate` is given
+   */
   readonly failureThreshold?: number;
+  /**
+   * Opens on the share of recent attempts that failed rather than on a run of
+   * them, so an upstream failing every other call still trips it. With
+   * `failureThreshold` too, whichever is reached first opens it.
+   */
+  readonly failureRate?: FailureRate;
   /** How long the circuit stays open before a probe is let through. @default 30_000 */
   readonly openMs?: number;
   /** Attempts let through at once while half-open. @default 1 */
@@ -47,10 +68,60 @@ const positiveInteger = (name: string, value: number): number => {
   return value;
 };
 
+/** The last `size` outcomes as a ring, with the failures among them counted. */
+class Outcomes {
+  readonly #failed: boolean[] = [];
+  #next = 0;
+  #failures = 0;
+
+  constructor(
+    private readonly size: number,
+    private readonly minimum: number,
+    private readonly ratio: number,
+  ) {}
+
+  /** Records one outcome and answers whether the window now opens the circuit. */
+  push(failed: boolean): boolean {
+    if (this.#failed[this.#next] === true) this.#failures -= 1;
+    this.#failed[this.#next] = failed;
+    if (failed) this.#failures += 1;
+    this.#next = (this.#next + 1) % this.size;
+    const held = this.#failed.length;
+    return held >= this.minimum && this.#failures / held >= this.ratio;
+  }
+
+  clear(): void {
+    this.#failed.length = 0;
+    this.#next = 0;
+    this.#failures = 0;
+  }
+}
+
+const outcomesFor = (rate: FailureRate): Outcomes => {
+  if (!(rate.ratio > 0 && rate.ratio <= 1)) {
+    throw new AppError(
+      `CircuitBreaker needs a failureRate.ratio above 0 and at most 1; got ${rate.ratio}.`,
+    );
+  }
+  const window = positiveInteger('failureRate.window', rate.window);
+  const minimum = positiveInteger(
+    'failureRate.minimumCalls',
+    rate.minimumCalls ?? window,
+  );
+  if (minimum > window) {
+    throw new AppError(
+      `CircuitBreaker's failureRate.minimumCalls (${minimum}) is over its ` +
+        `window (${window}), so the ratio could never be read.`,
+    );
+  }
+  return new Outcomes(window, minimum, rate.ratio);
+};
+
 /**
  * Stops calling a dependency that keeps failing.
  *
- * Closed counts consecutive failures and opens at `failureThreshold`. Open
+ * Closed counts consecutive failures and opens at `failureThreshold`, or on
+ * `failureRate` over a window of recent attempts. Open
  * rejects every attempt until `openMs` has passed, then lets `halfOpenProbes`
  * through: a probe that resolves closes it, one that fails opens it again.
  *
@@ -65,6 +136,7 @@ const positiveInteger = (name: string, value: number): number => {
  */
 export class CircuitBreaker {
   readonly #threshold: number;
+  readonly #outcomes: Outcomes | undefined;
   readonly #openMs: number;
   readonly #probes: number;
   readonly #isFailure: (error: unknown) => boolean;
@@ -77,10 +149,15 @@ export class CircuitBreaker {
   #inFlight = 0;
 
   constructor(options: CircuitBreakerOptions = {}) {
-    this.#threshold = positiveInteger(
-      'failureThreshold',
-      options.failureThreshold ?? 5,
-    );
+    const { failureThreshold, failureRate } = options;
+    this.#threshold =
+      failureThreshold !== undefined
+        ? positiveInteger('failureThreshold', failureThreshold)
+        : failureRate === undefined
+          ? 5
+          : Infinity;
+    this.#outcomes =
+      failureRate === undefined ? undefined : outcomesFor(failureRate);
     this.#openMs = options.openMs ?? 30_000;
     this.#probes = positiveInteger(
       'halfOpenProbes',
@@ -118,8 +195,13 @@ export class CircuitBreaker {
   }
 
   success(): void {
+    if (this.#state === 'half-open') {
+      this.#move('closed');
+      return;
+    }
+    if (this.#state === 'open') return;
     this.#failures = 0;
-    if (this.#state === 'half-open') this.#move('closed');
+    this.#outcomes?.push(false);
   }
 
   failure(error: unknown): void {
@@ -139,7 +221,10 @@ export class CircuitBreaker {
     // push `openedAt` forward.
     if (this.#state === 'open') return;
     this.#failures += 1;
-    if (this.#failures >= this.#threshold) this.#open();
+    // Recorded before the comparison, so the window holds this failure either
+    // way; the `||` would skip the push once the run alone opened it.
+    const rateTripped = this.#outcomes?.push(true) === true;
+    if (rateTripped || this.#failures >= this.#threshold) this.#open();
   }
 
   #open(): void {
@@ -154,6 +239,7 @@ export class CircuitBreaker {
     this.#state = to;
     this.#inFlight = 0;
     this.#failures = 0;
+    this.#outcomes?.clear();
     this.#onStateChange?.(to, from);
   }
 }

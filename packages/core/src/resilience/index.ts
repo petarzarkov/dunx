@@ -4,6 +4,7 @@ export {
   CircuitOpenError,
   type CircuitBreakerOptions,
   type CircuitState,
+  type FailureRate,
 } from './breaker.js';
 export {
   Bulkhead,

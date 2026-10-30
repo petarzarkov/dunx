@@ -201,7 +201,8 @@ suppressing it. Without a `fallback` the last error is rethrown.
 ## Stopping calls to a dependency that keeps failing
 
 A `CircuitBreaker` counts consecutive failed attempts and opens at
-`failureThreshold`. While open, every attempt is refused with a
+`failureThreshold`, or on `failureRate` over a window of recent attempts. While
+open, every attempt is refused with a
 `CircuitOpenError` without running. After `openMs` it lets `halfOpenProbes`
 attempts through: one that resolves closes it, and one that fails opens it again.
 
@@ -225,6 +226,11 @@ The breaker is an instance rather than options because its state has to outlive
 a policy. Build one per dependency and pass it to every policy that calls that
 dependency, including policies built per call.
 
+- **`failureRate` opens on a share rather than a run.** An upstream failing every
+  other call never reaches a consecutive threshold. `ratio: 0.5, window: 20`
+  opens when half of the last 20 attempts failed, once `minimumCalls` (the whole
+  window by default) have been recorded. Given only `failureRate`, the
+  consecutive count is off; given both, whichever is reached first opens it.
 - **The retry loop sits outside the breaker.** The attempt after the one that
   opened the circuit is refused, so a retry loop does not keep calling a
   dependency the breaker has given up on.
@@ -248,7 +254,7 @@ import { Bulkhead, ResilienceModule } from '@dunx/core';
 
 ResilienceModule.forRoot({
   timeoutMs: 2_000,
-  bulkhead: new Bulkhead({ maxConcurrent: 10, maxQueued: 20 }),
+  bulkhead: new Bulkhead({ maxConcurrent: 10, maxQueued: 20, maxWaitMs: 500 }),
 });
 ```
 
@@ -258,8 +264,9 @@ with a `BulkheadRejectedError` (`status: 503`), which `fallback` answers like an
 other failure.
 
 `maxQueued` defaults to `0`, which rejects as soon as the slots are full. A
-waiting call gives up when the policy's `signal` aborts, and the slot is
-released however the call ends.
+queued call is rejected with the same error after `maxWaitMs`, and gives up
+early when the policy's `signal` aborts. `timeoutMs` does not cover the wait,
+since it bounds each attempt. The slot is released however the call ends.
 
 Like the breaker, a bulkhead is an instance shared by the policies that should
 count against one cap, and it is per process: it protects this process's sockets

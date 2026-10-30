@@ -88,14 +88,20 @@ const POLICY_TIMEOUT_MS = 150;
           fallback: () => ({ cached: true }),
           // Built in the factory, which runs once, so every `run` shares one
           // breaker and one bulkhead. An upstream 4xx is an answer, so only a
-          // 5xx or a transport failure counts towards opening the circuit.
+          // 5xx or a transport failure counts, and the circuit opens when half
+          // of the last 20 attempts did, not only on a run of them.
           breaker: new CircuitBreaker({
-            failureThreshold: 5,
+            failureRate: { ratio: 0.5, window: 20, minimumCalls: 10 },
             openMs: 10_000,
             isFailure: (error) =>
               !(error instanceof FetchError) || error.status >= 500,
           }),
-          bulkhead: new Bulkhead({ maxConcurrent: 16, maxQueued: 32 }),
+          // A queued call waits a second at most, then the fallback answers.
+          bulkhead: new Bulkhead({
+            maxConcurrent: 16,
+            maxQueued: 32,
+            maxWaitMs: 1_000,
+          }),
         }),
         inject: [AppConfigService] as const,
       },

@@ -8,25 +8,29 @@ export interface BulkheadOptions {
    * call is rejected. 0 rejects as soon as the slots are full. @default 0
    */
   readonly maxQueued?: number;
+  /**
+   * How long a queued call waits for a slot before it is rejected. Unset waits
+   * until a slot frees or the caller's signal aborts. The policy's `timeoutMs`
+   * does not cover this, since it bounds each attempt and the wait comes first.
+   */
+  readonly maxWaitMs?: number;
 }
 
 /**
- * Raised when every slot and every queue position is taken. A 503, for the same
- * reason `CircuitOpenError` is one.
+ * Raised when every slot and every queue position is taken, or when a queued
+ * call waited `maxWaitMs` without a slot. A 503, for the same reason
+ * `CircuitOpenError` is one.
  */
 export class BulkheadRejectedError extends AppError {
   override name = 'BulkheadRejectedError';
   override readonly status = 503;
-
-  constructor(maxConcurrent: number, maxQueued: number) {
-    super(`Bulkhead is full: ${maxConcurrent} running and ${maxQueued} queued`);
-  }
 }
 
 interface Waiter {
   readonly resolve: () => void;
   readonly signal: AbortSignal | undefined;
   readonly onAbort: () => void;
+  readonly timer: ReturnType<typeof setTimeout> | undefined;
 }
 
 /**
@@ -44,13 +48,14 @@ interface Waiter {
 export class Bulkhead {
   readonly #max: number;
   readonly #maxQueued: number;
+  readonly #maxWaitMs: number | undefined;
   // A `Set` keeps insertion order, and a waiter whose caller gave up leaves it
   // without a scan.
   readonly #waiting = new Set<Waiter>();
   #active = 0;
 
   constructor(options: BulkheadOptions) {
-    const { maxConcurrent, maxQueued = 0 } = options;
+    const { maxConcurrent, maxQueued = 0, maxWaitMs } = options;
     if (!Number.isInteger(maxConcurrent) || maxConcurrent < 1) {
       throw new AppError(
         `Bulkhead needs a maxConcurrent of at least 1; got ${maxConcurrent}.`,
@@ -61,8 +66,18 @@ export class Bulkhead {
         `Bulkhead needs a maxQueued of 0 or more; got ${maxQueued}.`,
       );
     }
+    // Finite as well as positive: `setTimeout` fires an infinite delay at once.
+    if (
+      maxWaitMs !== undefined &&
+      !(Number.isFinite(maxWaitMs) && maxWaitMs > 0)
+    ) {
+      throw new AppError(
+        `Bulkhead needs a maxWaitMs above 0, or none; got ${maxWaitMs}.`,
+      );
+    }
     this.#max = maxConcurrent;
     this.#maxQueued = maxQueued;
+    this.#maxWaitMs = maxWaitMs;
   }
 
   get active(): number {
@@ -75,9 +90,9 @@ export class Bulkhead {
 
   /**
    * Resolves once a slot is held, and every resolution needs exactly one
-   * `release`. Rejects with `BulkheadRejectedError` when the queue is full too,
-   * or with the signal's reason when the caller gives up while waiting, and
-   * neither of those holds a slot.
+   * `release`. Rejects with `BulkheadRejectedError` when the queue is full too
+   * or `maxWaitMs` passes, or with the signal's reason when the caller gives up
+   * while waiting, and none of those holds a slot.
    */
   acquire(signal?: AbortSignal): Promise<void> {
     if (this.#active < this.#max) {
@@ -86,19 +101,35 @@ export class Bulkhead {
     }
     if (this.#waiting.size >= this.#maxQueued) {
       return Promise.reject(
-        new BulkheadRejectedError(this.#max, this.#maxQueued),
+        new BulkheadRejectedError(
+          `Bulkhead is full: ${this.#max} running and ${this.#maxQueued} queued`,
+        ),
       );
     }
     if (signal?.aborted === true) return Promise.reject(signal.reason);
 
     const { promise, resolve, reject } = Promise.withResolvers<void>();
+    const wait = this.#maxWaitMs;
     const waiter: Waiter = {
       resolve,
       signal,
       onAbort: () => {
-        this.#waiting.delete(waiter);
+        this.#leave(waiter);
         reject(signal?.reason);
       },
+      // A `setTimeout` rather than `AbortSignal.timeout`, because a waiter that
+      // gets its slot cancels it, and a timeout signal's timer runs out anyway.
+      timer:
+        wait === undefined
+          ? undefined
+          : setTimeout(() => {
+              this.#leave(waiter);
+              reject(
+                new BulkheadRejectedError(
+                  `Bulkhead had no free slot within ${wait}ms`,
+                ),
+              );
+            }, wait),
     };
     signal?.addEventListener('abort', waiter.onAbort, { once: true });
     this.#waiting.add(waiter);
@@ -111,9 +142,13 @@ export class Bulkhead {
       this.#active -= 1;
       return;
     }
-    const waiter = next.value;
+    this.#leave(next.value);
+    next.value.resolve();
+  }
+
+  #leave(waiter: Waiter): void {
     this.#waiting.delete(waiter);
     waiter.signal?.removeEventListener('abort', waiter.onAbort);
-    waiter.resolve();
+    clearTimeout(waiter.timer);
   }
 }

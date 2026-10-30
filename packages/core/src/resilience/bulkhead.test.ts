@@ -68,10 +68,48 @@ describe('Bulkhead', () => {
     expect(bulkhead.queued).toBe(0);
   });
 
-  it('refuses a cap below 1 or a negative queue', () => {
+  it('rejects a waiter that gets no slot within maxWaitMs', async () => {
+    const bulkhead = new Bulkhead({
+      maxConcurrent: 1,
+      maxQueued: 1,
+      maxWaitMs: 10,
+    });
+    await bulkhead.acquire();
+    const started = Date.now();
+    const waiting = bulkhead.acquire();
+    await expect(waiting).rejects.toBeInstanceOf(BulkheadRejectedError);
+    await expect(waiting).rejects.toThrow('within 10ms');
+    expect(Date.now() - started).toBeGreaterThanOrEqual(9);
+    expect(bulkhead.queued).toBe(0);
+    expect(bulkhead.active).toBe(1);
+  });
+
+  /** A waiter served in time must not be rejected later by its own timer. */
+  it('cancels the wait timer once a slot arrives', async () => {
+    const bulkhead = new Bulkhead({
+      maxConcurrent: 1,
+      maxQueued: 1,
+      maxWaitMs: 20,
+    });
+    await bulkhead.acquire();
+    const waiting = bulkhead.acquire();
+    bulkhead.release();
+    await waiting;
+    await Bun.sleep(30);
+    expect(bulkhead.active).toBe(1);
+    bulkhead.release();
+    expect(bulkhead.active).toBe(0);
+  });
+
+  it('refuses a cap below 1, a negative queue or a wait it cannot time', () => {
     expect(() => new Bulkhead({ maxConcurrent: 0 })).toThrow(AppError);
     expect(() => new Bulkhead({ maxConcurrent: 1, maxQueued: -1 })).toThrow(
       'maxQueued',
     );
+    for (const maxWaitMs of [0, Infinity, Number.NaN]) {
+      expect(() => new Bulkhead({ maxConcurrent: 1, maxWaitMs })).toThrow(
+        'maxWaitMs',
+      );
+    }
   });
 });

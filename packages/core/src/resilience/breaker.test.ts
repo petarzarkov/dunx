@@ -137,3 +137,96 @@ describe('CircuitBreaker', () => {
     );
   });
 });
+
+describe('CircuitBreaker failureRate', () => {
+  const rate = (minimumCalls = 4) =>
+    new CircuitBreaker({
+      failureRate: { ratio: 0.5, window: 4, minimumCalls },
+    });
+
+  /** Never two in a row, so a consecutive count alone would never open it. */
+  it('opens on the share of recent attempts that failed', () => {
+    const breaker = rate();
+    breaker.success();
+    breaker.failure(boom);
+    breaker.success();
+    expect(breaker.state).toBe('closed');
+    breaker.failure(boom);
+    expect(breaker.state).toBe('open');
+  });
+
+  it('waits for minimumCalls before trusting the ratio', () => {
+    const breaker = rate(3);
+    breaker.failure(boom);
+    breaker.failure(boom);
+    expect(breaker.state).toBe('closed');
+    breaker.success();
+    expect(breaker.state).toBe('closed');
+
+    const early = rate(2);
+    early.success();
+    early.failure(boom);
+    expect(early.state).toBe('open');
+  });
+
+  /** The oldest outcome leaves as a new one arrives, failures included. */
+  it('forgets outcomes older than the window', () => {
+    const breaker = new CircuitBreaker({
+      failureRate: { ratio: 0.75, window: 4 },
+    });
+    breaker.failure(boom);
+    breaker.failure(boom);
+    breaker.success();
+    breaker.success();
+    breaker.failure(boom);
+    breaker.success();
+    breaker.failure(boom);
+    expect(breaker.state).toBe('closed');
+    breaker.failure(boom);
+    expect(breaker.state).toBe('open');
+  });
+
+  it('starts a fresh window after closing again', () => {
+    const reopened = new CircuitBreaker({
+      openMs: 0,
+      failureRate: { ratio: 0.5, window: 2 },
+    });
+    reopened.failure(boom);
+    reopened.failure(boom);
+    expect(reopened.state).toBe('open');
+    reopened.admit();
+    reopened.success();
+    expect(reopened.state).toBe('closed');
+    reopened.failure(boom);
+    expect(reopened.state).toBe('closed');
+  });
+
+  it('leaves the consecutive count off unless it is asked for too', () => {
+    const rateOnly = new CircuitBreaker({
+      failureRate: { ratio: 1, window: 10 },
+    });
+    for (let i = 0; i < 9; i += 1) rateOnly.failure(boom);
+    expect(rateOnly.state).toBe('closed');
+
+    const both = new CircuitBreaker({
+      failureThreshold: 2,
+      failureRate: { ratio: 1, window: 10 },
+    });
+    both.failure(boom);
+    both.failure(boom);
+    expect(both.state).toBe('open');
+  });
+
+  it('refuses a ratio, window or minimum it could never read', () => {
+    const with_ =
+      (failureRate: { ratio: number; window: number; minimumCalls?: number }) =>
+      () =>
+        new CircuitBreaker({ failureRate });
+    expect(with_({ ratio: 0, window: 4 })).toThrow('ratio');
+    expect(with_({ ratio: 1.5, window: 4 })).toThrow('ratio');
+    expect(with_({ ratio: 0.5, window: 0 })).toThrow('window');
+    expect(with_({ ratio: 0.5, window: 4, minimumCalls: 5 })).toThrow(
+      'minimumCalls',
+    );
+  });
+});
