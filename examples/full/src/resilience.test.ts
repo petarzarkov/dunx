@@ -1,5 +1,14 @@
 import { afterAll, beforeAll, expect, it } from 'bun:test';
-import { HttpService } from '@dunx/http/client';
+import {
+  Bulkhead,
+  BulkheadRejectedError,
+  CircuitBreaker,
+  CircuitOpenError,
+  ResilienceOptions,
+  ResiliencePolicy,
+  type ResilienceOptionsInit,
+} from '@dunx/core';
+import { HttpRetryClassifier, HttpService } from '@dunx/http/client';
 import { createTestServer, type TestServer } from '@dunx/testing';
 import { configModule } from './config.js';
 import { FLAKY_FAILURES, SLOW_ROUTE_MS } from './upstream/flaky.controller.js';
@@ -71,4 +80,51 @@ it('cancels a slow call with the budget the policy handed the attempt', async ()
   // An abort is never retried, so the fallback answers within one budget.
   expect(answered.cached).toBe(true);
   expect(Date.now() - started).toBeLessThan(SLOW_ROUTE_MS);
+});
+
+const perCall = (init: ResilienceOptionsInit): ResiliencePolicy =>
+  new ResiliencePolicy(new ResilienceOptions(init));
+
+/**
+ * A policy per call, as `HttpService` builds them, so the breaker is the only
+ * thing carrying state from one call to the next.
+ */
+it('opens a shared breaker on 503s and stops sending', async () => {
+  const breaker = new CircuitBreaker({ failureThreshold: 2 });
+  const key = `breaker-suite-${Date.now()}`;
+  let sent = 0;
+  const call = () =>
+    perCall({
+      breaker,
+      retry: { maxRetries: 3, retryDelayMs: 5 },
+      classifier: new HttpRetryClassifier(),
+    }).run((signal) => {
+      sent += 1;
+      return http().get(upstream(`upstream/flaky?key=${key}`), {
+        retry: { maxRetries: 0 },
+        signal,
+      });
+    });
+
+  await expect(call()).rejects.toBeInstanceOf(CircuitOpenError);
+  await expect(call()).rejects.toBeInstanceOf(CircuitOpenError);
+  expect(sent).toBe(2);
+  expect(breaker.state).toBe('open');
+});
+
+it('sheds a call past the bulkhead while the first is in flight', async () => {
+  const bulkhead = new Bulkhead({ maxConcurrent: 1 });
+  const slow = () =>
+    perCall({ bulkhead, retry: { maxRetries: 0 } }).run((signal) =>
+      http().get<{ done: true }>(upstream('upstream/slow'), {
+        retry: { maxRetries: 0 },
+        timeoutMs: 0,
+        signal,
+      }),
+    );
+
+  const first = slow();
+  await expect(slow()).rejects.toBeInstanceOf(BulkheadRejectedError);
+  expect(await first).toEqual({ done: true });
+  expect(bulkhead.active).toBe(0);
 });

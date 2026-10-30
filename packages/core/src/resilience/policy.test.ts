@@ -1,6 +1,8 @@
 import { describe, expect, it, spyOn } from 'bun:test';
 import { AppError } from '../di/errors.js';
 import { backoffDelay } from './backoff.js';
+import { CircuitBreaker, CircuitOpenError } from './breaker.js';
+import { Bulkhead, BulkheadRejectedError } from './bulkhead.js';
 import {
   RetryClassifier,
   TransientRetryClassifier,
@@ -374,5 +376,122 @@ describe('what the retry loop does not catch', () => {
     };
 
     expect(await subject.run(attempt)).toBe('FALLBACK');
+  });
+});
+
+const failing = () => Promise.reject(new Error('down'));
+
+describe('the circuit breaker', () => {
+  /**
+   * Retry sits outside the breaker, so a retry loop cannot keep hammering a
+   * dependency the breaker has given up on: the attempt after the one that
+   * opened it is refused without being made.
+   */
+  it('refuses the attempts after the one that opened it', async () => {
+    const breaker = new CircuitBreaker({ failureThreshold: 2 });
+    let calls = 0;
+    const subject = policy({
+      breaker,
+      retry: { maxRetries: 5, retryDelayMs: 1, backoff: { jitterMs: 0 } },
+    });
+
+    await expect(
+      subject.run(() => {
+        calls += 1;
+        return failing();
+      }),
+    ).rejects.toBeInstanceOf(CircuitOpenError);
+    expect(calls).toBe(2);
+    expect(breaker.state).toBe('open');
+  });
+
+  /** A policy per call, as `HttpService` builds them, still shares one breaker. */
+  it('keeps its state across policies, and answers a refusal with the fallback', async () => {
+    const breaker = new CircuitBreaker({ failureThreshold: 1 });
+    const once = { maxRetries: 0 };
+    await policy({ breaker, retry: once })
+      .run(failing)
+      .catch(() => undefined);
+
+    let ran = false;
+    const answered = await policy({
+      breaker,
+      retry: once,
+      fallback: (error) => (error as CircuitOpenError).name,
+    }).run(() => {
+      ran = true;
+      return Promise.resolve('live');
+    });
+    expect(answered).toBe('CircuitOpenError');
+    expect(ran).toBe(false);
+  });
+
+  it('closes on a successful attempt', async () => {
+    const breaker = new CircuitBreaker({ failureThreshold: 1, openMs: 0 });
+    await policy({ breaker, retry: { maxRetries: 0 } })
+      .run(failing)
+      .catch(() => undefined);
+    expect(breaker.state).toBe('open');
+
+    expect(await policy({ breaker }).run(() => Promise.resolve('up'))).toBe(
+      'up',
+    );
+    expect(breaker.state).toBe('closed');
+  });
+});
+
+describe('the bulkhead', () => {
+  it('holds one slot for the whole call, retries included', async () => {
+    const bulkhead = new Bulkhead({ maxConcurrent: 1 });
+    const subject = policy({
+      bulkhead,
+      retry: { maxRetries: 2, retryDelayMs: 1, backoff: { jitterMs: 0 } },
+    });
+    let calls = 0;
+    const seen: number[] = [];
+    await subject.run(() => {
+      calls += 1;
+      seen.push(bulkhead.active);
+      return calls < 3 ? failing() : Promise.resolve('ok');
+    });
+    expect(seen).toEqual([1, 1, 1]);
+    expect(bulkhead.active).toBe(0);
+  });
+
+  it('rejects a call past the cap, through the fallback when there is one', async () => {
+    const bulkhead = new Bulkhead({ maxConcurrent: 1 });
+    const { promise: gate, resolve } = Promise.withResolvers<string>();
+    const running = policy({ bulkhead }).run(() => gate);
+
+    await expect(policy({ bulkhead }).run(failing)).rejects.toBeInstanceOf(
+      BulkheadRejectedError,
+    );
+    expect(
+      await policy({ bulkhead, fallback: () => 'shed' }).run<string>(failing),
+    ).toBe('shed');
+
+    resolve('done');
+    expect(await running).toBe('done');
+    expect(bulkhead.active).toBe(0);
+  });
+
+  it('releases the slot when the call fails', async () => {
+    const bulkhead = new Bulkhead({ maxConcurrent: 1 });
+    await expect(
+      policy({ bulkhead, retry: { maxRetries: 0 } }).run(failing),
+    ).rejects.toThrow('down');
+    expect(bulkhead.active).toBe(0);
+  });
+
+  it('gives up waiting with the caller', async () => {
+    const bulkhead = new Bulkhead({ maxConcurrent: 1, maxQueued: 1 });
+    await bulkhead.acquire();
+    const controller = new AbortController();
+    const waiting = policy({ bulkhead, signal: controller.signal }).run(() =>
+      Promise.resolve('never'),
+    );
+    controller.abort(new Error('hung up'));
+    await expect(waiting).rejects.toThrow('hung up');
+    expect(bulkhead.queued).toBe(0);
   });
 });

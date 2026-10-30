@@ -33,27 +33,27 @@ bunx @dunx/create-app my-api
 Elysia and Hono hand you a router, and everything above it is yours to choose
 and keep in step. This is the other trade: one dependency, one release train.
 
-| You need           | dunx gives you                                                                |
-| ------------------ | ----------------------------------------------------------------------------- |
-| Structure          | Controllers, scoped modules, constructor DI, lifecycle hooks                  |
-| Requests           | `Bun.serve` routing, middleware, guards, CORS, compression, throttling        |
-| Configuration      | One validate function over `Bun.env`, YAML, TOML or JSON, typed end to end    |
-| Validation         | Standard Schema, so zod, Valibot or ArkType all drop in                       |
-| API documentation  | OpenAPI 3.1 from the routes' own schemas, behind Swagger UI or Scalar         |
-| Realtime           | WebSocket gateways and `@Sse`, with a Redis or Postgres relay for many nodes  |
-| Service to service | Connect and gRPC-Web, through the middleware chain the app has                |
-| Decoupling         | An in-process event bus: publish a class, subscribe with `@OnEvent`           |
-| Data               | drizzle over `bun:sqlite` and `Bun.SQL`, transactions, seeds, paging          |
-| Caching            | Memory, Redis or the two tiered, with single flight on a miss                 |
-| Background work    | bullmq over `Bun.RedisClient`, sandboxed processors, `@Cron`                  |
-| Messaging          | RabbitMQ topic exchanges, one handler per queue, the trace carried across     |
-| Storage and images | One `Storage` contract over `Bun.file` and `Bun.S3Client`, `Bun.Image`        |
-| Auth               | better-auth mounted, a session guard, `Bun.password` hashing                  |
-| Calling out        | An HTTP client with retry, backoff and trace propagation                      |
-| Failing well       | `ResiliencePolicy` around anything: timeout, retry, backoff, jitter, fallback |
-| Operating it       | Health checks, structured logging, request and driver metrics, a dashboard    |
-| Testing            | The real container with bindings replaced, a real server on port 0            |
-| Tooling            | A scaffolder, and an MCP server so an agent can read your app                 |
+| You need           | dunx gives you                                                                          |
+| ------------------ | --------------------------------------------------------------------------------------- |
+| Structure          | Controllers, scoped modules, constructor DI, lifecycle hooks                            |
+| Requests           | `Bun.serve` routing, middleware, guards, CORS, compression, throttling                  |
+| Configuration      | One validate function over `Bun.env`, YAML, TOML or JSON, typed end to end              |
+| Validation         | Standard Schema, so zod, Valibot or ArkType all drop in                                 |
+| API documentation  | OpenAPI 3.1 from the routes' own schemas, behind Swagger UI or Scalar                   |
+| Realtime           | WebSocket gateways and `@Sse`, with a Redis or Postgres relay for many nodes            |
+| Service to service | Connect and gRPC-Web, through the middleware chain the app has                          |
+| Decoupling         | An in-process event bus: publish a class, subscribe with `@OnEvent`                     |
+| Data               | drizzle over `bun:sqlite` and `Bun.SQL`, transactions, seeds, paging                    |
+| Caching            | Memory, Redis or the two tiered, with single flight on a miss                           |
+| Background work    | bullmq over `Bun.RedisClient`, sandboxed processors, `@Cron`                            |
+| Messaging          | RabbitMQ topic exchanges, one handler per queue, the trace carried across               |
+| Storage and images | One `Storage` contract over `Bun.file` and `Bun.S3Client`, `Bun.Image`                  |
+| Auth               | better-auth mounted, a session guard, `Bun.password` hashing                            |
+| Calling out        | An HTTP client with retry, backoff and trace propagation                                |
+| Failing well       | `ResiliencePolicy` around anything: timeout, retry, fallback, circuit breaker, bulkhead |
+| Operating it       | Health checks, structured logging, request and driver metrics, a dashboard              |
+| Testing            | The real container with bindings replaced, a real server on port 0                      |
+| Tooling            | A scaffolder, and an MCP server so an agent can read your app                           |
 
 Every one of those is a Bun primitive or a best-in-class library wired to one,
 never a reimplementation. Each is opt-in: `@dunx/core` has zero dependencies,

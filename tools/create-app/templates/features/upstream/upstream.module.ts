@@ -1,5 +1,6 @@
-import { Module, ResilienceModule } from '@dunx/core';
+import { Bulkhead, CircuitBreaker, Module, ResilienceModule } from '@dunx/core';
 import {
+  FetchError,
   HttpModule as HttpClientModule,
   HttpRetryClassifier,
   HttpService,
@@ -67,8 +68,9 @@ const POLICY_TIMEOUT_MS = 150;
      * Retry, backoff and jitter around any operation rather than one request.
      * `@dunx/core` owns the loop; `HttpRetryClassifier` is what teaches it that a
      * 404 is an answer and a 503 is not, and `fallback` is what it answers with
-     * once the attempts are spent. Its budget is under the client's, so a call
-     * that outlives it is cancelled through the signal `run` hands each attempt.
+     * once the attempts are spent, or once the breaker or the bulkhead refuses
+     * the call. Its budget is under the client's, so a call that outlives it is
+     * cancelled through the signal `run` hands each attempt.
      */
     ResilienceModule.forRootAsync(
       {
@@ -84,6 +86,22 @@ const POLICY_TIMEOUT_MS = 150;
           },
           classifier: new HttpRetryClassifier(),
           fallback: () => ({ cached: true }),
+          // Built in the factory, which runs once, so every `run` shares one
+          // breaker and one bulkhead. An upstream 4xx is an answer, so only a
+          // 5xx or a transport failure counts, and the circuit opens when half
+          // of the last 20 attempts did, not only on a run of them.
+          breaker: new CircuitBreaker({
+            failureRate: { ratio: 0.5, window: 20, minimumCalls: 10 },
+            openMs: 10_000,
+            isFailure: (error) =>
+              !(error instanceof FetchError) || error.status >= 500,
+          }),
+          // A queued call waits a second at most, then the fallback answers.
+          bulkhead: new Bulkhead({
+            maxConcurrent: 16,
+            maxQueued: 32,
+            maxWaitMs: 1_000,
+          }),
         }),
         inject: [AppConfigService] as const,
       },

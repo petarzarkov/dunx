@@ -1,7 +1,15 @@
-import { Logger } from '@dunx/core';
+import {
+  Bulkhead,
+  CircuitBreaker,
+  CircuitOpenError,
+  Logger,
+  ResilienceOptions,
+  ResiliencePolicy,
+} from '@dunx/core';
 import {
   FetchError,
   FetchTransportError,
+  HttpRetryClassifier,
   HttpService,
 } from '@dunx/http/client';
 import { HealthClient } from './health.client.js';
@@ -126,6 +134,67 @@ export class UpstreamDemo {
     this.logger.info(
       `ResiliencePolicy timeoutMs against a 300 ms route -> ` +
         `cached=${bounded.cached} (the attempt signal reached fetch)`,
+    );
+
+    await this.demonstrateBreaker(url);
+    await this.demonstrateBulkhead(url);
+  }
+
+  /** A policy built per call, the way `HttpService` builds one, sharing one
+   * breaker. Two 503s open it, so the third attempt is never sent. */
+  private async demonstrateBreaker(url: string): Promise<void> {
+    const breaker = new CircuitBreaker({ failureThreshold: 2 });
+    const key = `breaker-${Date.now()}`;
+    let sent = 0;
+    const call = () =>
+      new ResiliencePolicy(
+        new ResilienceOptions({
+          breaker,
+          retry: { maxRetries: 3, retryDelayMs: 5 },
+          classifier: new HttpRetryClassifier(),
+        }),
+      ).run((signal) => {
+        sent += 1;
+        return this.http.get(new URL(`api/upstream/flaky?key=${key}`, url), {
+          retry: { maxRetries: 0 },
+          signal,
+        });
+      });
+
+    const refused = await call().catch((error: unknown) => error);
+    if (!(refused instanceof CircuitOpenError)) {
+      throw new Error('two 503s should have opened the circuit');
+    }
+    this.logger.info(
+      `CircuitBreaker after ${sent} 503s -> ${breaker.state}, the retry ` +
+        'was refused without a request',
+    );
+  }
+
+  /** One slot, two concurrent calls on the 300 ms route: the second is shed
+   * at once through the fallback instead of queueing behind the first. */
+  private async demonstrateBulkhead(url: string): Promise<void> {
+    const policy = new ResiliencePolicy(
+      new ResilienceOptions({
+        bulkhead: new Bulkhead({ maxConcurrent: 1 }),
+        retry: { maxRetries: 0 },
+        fallback: () => ({ shed: true }),
+      }),
+    );
+    const slow = () =>
+      policy.run((signal) =>
+        this.http.get<{ done?: true; shed?: true }>(
+          new URL('api/upstream/slow', url),
+          { retry: { maxRetries: 0 }, timeoutMs: 0, signal },
+        ),
+      );
+
+    const [first, second] = await Promise.all([slow(), slow()]);
+    if (first.done !== true || second.shed !== true) {
+      throw new Error('a one-slot bulkhead should run one call and shed one');
+    }
+    this.logger.info(
+      'Bulkhead maxConcurrent 1, two calls at once -> done, shed',
     );
   }
 }

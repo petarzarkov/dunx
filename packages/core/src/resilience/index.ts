@@ -1,5 +1,17 @@
 export { backoffDelay, type BackoffOptions } from './backoff.js';
 export {
+  CircuitBreaker,
+  CircuitOpenError,
+  type CircuitBreakerOptions,
+  type CircuitState,
+  type FailureRate,
+} from './breaker.js';
+export {
+  Bulkhead,
+  BulkheadRejectedError,
+  type BulkheadOptions,
+} from './bulkhead.js';
+export {
   RetryClassifier,
   TransientRetryClassifier,
   type RetryVerdict,

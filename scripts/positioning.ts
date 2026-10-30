@@ -120,7 +120,7 @@ export const CAPABILITIES: readonly Capability[] = [
   {
     need: 'Failing well',
     gives:
-      '`ResiliencePolicy` around anything: timeout, retry, backoff, jitter, fallback',
+      '`ResiliencePolicy` around anything: timeout, retry, fallback, circuit breaker, bulkhead',
   },
   {
     need: 'Operating it',
