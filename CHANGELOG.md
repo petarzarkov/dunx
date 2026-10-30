@@ -4,6 +4,33 @@ Every release, newest first. Written by `bun run version` from the commits in th
 release range. Every @dunx package shares one version and ships together, so a
 release covers all of them.
 
+## 3.10.6 - 2026-10-30
+
+Circuit breaker and bulkhead in ResiliencePolicy, Bun 1.4.4
+
+ResiliencePolicy takes an optional CircuitBreaker, opening on consecutive
+failures or a failure rate over recent attempts, and a Bulkhead capping
+concurrent calls with a bounded, time-limited queue. Both answer through
+fallback and surface as 503s when unhandled.
+
+### Features
+
+- **core**: failureRate on CircuitBreaker, maxWaitMs on Bulkhead ([`a927b06`](https://github.com/petarzarkov/dunx/commit/a927b0664fba83bacd3e4b45e19ce573ab3e9202))
+- **core**: circuit breaker and bulkhead in ResiliencePolicy ([`055a812`](https://github.com/petarzarkov/dunx/commit/055a8127808f4f916292950ce4853daa13bd1fa9))
+
+### Fixes
+
+- **hooks**: find bun when the git client starts without it on PATH ([`f1426e5`](https://github.com/petarzarkov/dunx/commit/f1426e50133ee2cc2f91b9c23cab4a199a34be2c))
+- follow Bun 1.4.4's Date binding, close codes and SQL arrays ([`af8e20c`](https://github.com/petarzarkov/dunx/commit/af8e20c577fb7162e73498d0f1001f6b65a74d89))
+
+### Documentation
+
+- the Prettier printer needs .oxfmtrc.json gone, not just a [fmt] section ([`9ad7d40`](https://github.com/petarzarkov/dunx/commit/9ad7d40a5dad44e0c8134cfdc1c3c3e7a8a35531))
+
+### Other changes
+
+- Bun 1.4.4, and bun fmt in place of oxfmt ([`a9bd1d9`](https://github.com/petarzarkov/dunx/commit/a9bd1d9c4cdb48b08a5839aa637dcb7cb5997d80))
+
 ## 3.10.5 - 2026-10-22
 
 Listener hostname, per-route body and query parsers, declared route status
