@@ -1,6 +1,7 @@
 import { Controller, Get, Post, type Input } from '@dunx/http';
 import { EmailService, EmailTransport } from '@dunx/infra/email';
 import { z } from 'zod';
+import { AppConfigService } from '../config.js';
 import { Notices } from './notices.service.js';
 
 const SendWelcome = z
@@ -25,6 +26,7 @@ export class MailController {
     private readonly email: EmailService,
     private readonly transport: EmailTransport,
     private readonly notices: Notices,
+    private readonly config: AppConfigService,
   ) {}
 
   @Get('/')
@@ -50,7 +52,7 @@ export class MailController {
     const { default: Welcome } = await import('./templates/welcome.js');
     const rendered = await this.email.render(Welcome, {
       name: query.name,
-      appUrl: 'https://demo.dunx.win',
+      appUrl: this.config.get('publicUrl'),
     });
     return new Response(rendered.html, {
       headers: {

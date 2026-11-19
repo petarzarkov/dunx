@@ -3,15 +3,6 @@
 One long-running backend service that uses every part of dunx, so you can open it
 and poke at it rather than read about it.
 
-It is running at **[demo.dunx.win](https://demo.dunx.win)**, so you can poke at it
-without cloning anything: [the landing page](https://demo.dunx.win),
-[the API explorer](https://demo.dunx.win/api/docs),
-[the dashboard](https://demo.dunx.win/api/dashboard) and
-[bull-board](https://demo.dunx.win/api/dashboard/queues).
-
-The database there is in memory and reseeds on restart, so nothing you create
-lasts. That deployment is this directory's `Dockerfile` and `compose.demo.yml`.
-
 **New to dunx? Start with a smaller example.** [`examples/minimal`](../minimal) is
 five files and takes two minutes. [`examples/databases`](../databases) sets up a
 database four ways. [`examples/testing`](../testing) shows how to test an app.
@@ -352,9 +343,8 @@ jobs gets it too.
 
 The preload does nothing unless `OTEL_EXPORTER_OTLP_ENDPOINT` is set. Without it,
 spans are not recorded and log lines carry ids that dunx generates. `bun start`
-and the public demo run this way. With it set, the log line's `traceId` and
-`spanId`, the `traceresponse` header and the exported SERVER span all share the
-same ids:
+runs this way. With it set, the log line's `traceId` and `spanId`, the
+`traceresponse` header and the exported SERVER span all share the same ids:
 
 ```bash
 docker run -d --rm -p 16686:16686 -p 4318:4318 jaegertracing/jaeger

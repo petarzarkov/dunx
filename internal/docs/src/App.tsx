@@ -160,15 +160,6 @@ const Navigation = ({
       active={route.kind === RouteKind.Coverage}
       onClick={onNavigate}
     />
-    <NavLink
-      component="a"
-      href="https://demo.dunx.win"
-      target="_blank"
-      rel="noreferrer"
-      label="Live demo"
-      description="examples/full, deployed"
-      onClick={onNavigate}
-    />
   </>
 );
 

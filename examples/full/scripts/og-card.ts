@@ -28,7 +28,7 @@ const style: CardStyle = {
 /** Literals throughout, so there is nothing to escape. */
 const content: CardContent = {
   badge: 'live demo',
-  headline: ['Every part of the framework,', 'running on a Raspberry Pi.'],
+  headline: ['Every part of the framework,', 'in one running process.'],
   blurb:
     '<b>examples/full</b> from the repository, unmodified. Click a panel and it ' +
     'calls the same routes the tests and the OpenAPI document are generated from.',
