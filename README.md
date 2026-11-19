@@ -17,7 +17,6 @@ together, on Bun's own primitives.
 [![CI](https://github.com/petarzarkov/dunx/actions/workflows/ci.yml/badge.svg)](https://github.com/petarzarkov/dunx/actions/workflows/ci.yml)
 [![coverage](https://dunx.win/badges/coverage.svg)](https://dunx.win/coverage)
 [![docs](https://img.shields.io/badge/docs-dunx.win-blue)](https://dunx.win)
-[![demo](https://img.shields.io/badge/demo-demo.dunx.win-brightgreen)](https://demo.dunx.win)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Bun](https://img.shields.io/badge/Bun-%E2%89%A51.4.3-black.svg)](https://bun.sh)
 [![Sponsor](https://img.shields.io/badge/Sponsor-%E2%9D%A4-EA4AAA.svg?logo=githubsponsors&logoColor=white)](https://github.com/sponsors/petarzarkov)
@@ -147,12 +146,12 @@ specifier is a compile error rather than a runtime surprise.
 
 ## Documentation
 
-- **[The live demo](https://demo.dunx.win)** - `examples/full` running on a
-  Raspberry Pi 5: the API explorer, the ops dashboard, bull-board, and a
-  walkthrough that drives twenty-five capabilities from a browser, including a
-  transaction rolling back, a CSRF refusal, an idempotent retry, an order
-  crossing a RabbitMQ topic exchange, and the process's own request, query and
-  event-loop timings
+- **[The full example](examples/full)** - every package in one service, with
+  the API explorer, the ops dashboard, bull-board, and a landing page that
+  drives twenty-five capabilities from a browser, including a transaction
+  rolling back, a CSRF refusal, an idempotent retry, an order crossing a
+  RabbitMQ topic exchange, and the process's own request, query and event-loop
+  timings
 - **[The guide](https://dunx.win)** - thirty-five pages,
   introduction through cookies
 - **[Migrating from NestJS](docs/MIGRATION-FROM-NEST.md)** - what maps across and
@@ -204,17 +203,6 @@ Reproduce it with `bun run --filter '@dunx/bench' start`. The methodology is in
   compatibility layer. `Bun.serve`, `bun:sqlite`, `Bun.RedisClient` and
   `Bun.password` are load-bearing throughout.
 - **You want a mature third-party ecosystem.** There is not one yet.
-
-## Built with dunx
-
-### [Firecracker](https://github.com/petarzarkov/firecracker) - [live](https://firecracker.petarzarkov.com/)
-
-A provably-fair crash game: bet during the window, watch the rocket climb,
-cash out before it explodes. Every round is verifiable after the fact.
-
-21 modules, 8 controllers, a WebSocket gateway and 4 job handlers across 165
-backend files, on `@dunx/core`, `@dunx/http`, `@dunx/infra`, `@dunx/auth`,
-`@dunx/openapi`, `@dunx/testing`, `@dunx/transform`.
 
 ## Examples
 

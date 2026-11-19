@@ -1,7 +1,7 @@
-# The live demo at demo.dunx.win: this example, unmodified, behind a Cloudflare
-# tunnel. Build context is the **workspace root**, not this directory:
+# This example, unmodified, as a container image. Build context is the
+# **workspace root**, not this directory:
 #
-#   docker build -f examples/full/Dockerfile -t dunx-demo .
+#   docker build -f examples/full/Dockerfile -t dunx-full .
 #
 # ## It runs from source, and that is not laziness
 #
@@ -40,7 +40,7 @@ RUN bun install --frozen-lockfile --ignore-scripts
 # `scripts/build-all.ts` exists for exactly that reason; this is its ordering for
 # the seven packages the example imports.
 #
-# `@dunx/testing` is in the list although the demo never imports it: a package's
+# `@dunx/testing` is in the list although the app never imports it: a package's
 # build emits declarations with `tsc`, whose program includes that package's own
 # `*.test.ts`, and `@dunx/openapi`'s suite imports `@dunx/testing`. Skipping it
 # failed openapi's build on `TS2307` for a module the image does not run.
@@ -62,10 +62,10 @@ RUN apt-get update \
   && apt-get install -y --no-install-recommends curl \
   && rm -rf /var/lib/apt/lists/*
 
-# `DATABASE_FILE` stays `:memory:`, the schema's default: the demo reseeds on
+# `DATABASE_FILE` stays `:memory:`, the schema's default: the app reseeds on
 # every restart, so nothing a visitor creates outlives the process and no
 # personal data reaches a disk. `AUTH_SECRET` has no default worth shipping and
-# is passed by the compose file.
+# is passed at `docker run`.
 ENV NODE_ENV=production \
     TZ=UTC \
     PORT=3000 \

@@ -38,6 +38,6 @@ const Welcome = ({ name, appUrl }: WelcomeProps) => (
 );
 
 /** What `dunx-email preview` renders it with. React Email's own convention. */
-Welcome.PreviewProps = { name: 'Ada', appUrl: 'https://demo.dunx.win' };
+Welcome.PreviewProps = { name: 'Ada', appUrl: 'http://localhost:3000' };
 
 export default Welcome;

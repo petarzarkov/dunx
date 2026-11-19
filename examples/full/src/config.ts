@@ -111,7 +111,7 @@ const envSchema = z.object({
    * explorable and `@dunx/dashboard` still warns that it is unguarded.
    */
   DASHBOARD_TOKEN: z.string().min(1).optional(),
-  /** bull-board's `readOnlyMode`, inverted. The public demo sets it false. */
+  /** bull-board's `readOnlyMode`, inverted. A public deployment sets it false. */
   DASHBOARD_COMMANDS: z.stringbool().default(true),
   /** Puts both explorers behind a session. False so the demo stays readable. */
   DOCS_GUARDED: z.stringbool().default(false),
@@ -129,7 +129,7 @@ const envSchema = z.object({
     .default('dunx-full-example-cookie-secret-not-for-production')
     .transform((list) => list.split(',').map((secret) => secret.trim()))
     .pipe(z.array(z.string().min(32)).min(1)),
-  /** No sign-up; a guest account per visitor instead. The public demo's shape. */
+  /** No sign-up; a guest account per visitor instead. A public deployment's shape. */
   AUTH_GUEST_ONLY: z.stringbool().default(false),
   AUTH_SESSION_DAYS: z.coerce.number().int().min(1).default(7),
   /** From `application.yml`. No default, so a missing file fails boot here. */

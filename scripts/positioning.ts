@@ -141,45 +141,6 @@ export const CAPABILITIES: readonly Capability[] = [
 export const lead = (): string => HEADLINE.join(' ');
 
 /**
- * Real applications built on dunx.
- *
- * The review that shaped 3.0.0 rated one nameable user above the next ten
- * features, and it is right: an evaluator deciding whether to depend on a
- * solo-maintained framework wants to see something that is not an example in
- * this repo. The numbers are counted from the source rather than described.
- */
-export interface Showcase {
-  readonly name: string;
-  readonly what: string;
-  readonly repo: string;
-  /** Where it runs, when it is public. */
-  readonly url?: string;
-  /** What it exercises, counted from its own source. */
-  readonly scale: string;
-  readonly packages: readonly string[];
-}
-
-export const SHOWCASE: readonly Showcase[] = [
-  {
-    name: 'Firecracker',
-    what: 'A provably-fair crash game: bet during the window, watch the rocket climb, cash out before it explodes. Every round is verifiable after the fact.',
-    repo: 'https://github.com/petarzarkov/firecracker',
-    url: 'https://firecracker.petarzarkov.com/',
-    scale:
-      '21 modules, 8 controllers, a WebSocket gateway and 4 job handlers across 165 backend files',
-    packages: [
-      'core',
-      'http',
-      'infra',
-      'auth',
-      'openapi',
-      'testing',
-      'transform',
-    ],
-  },
-];
-
-/**
  * The soak result, declared here for the reason everything else in this file is:
  * the documentation site states it and `examples/full/README.md` describes the
  * harness that produced it, and the two had no way to stay in step.

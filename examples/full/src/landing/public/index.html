@@ -6,33 +6,33 @@
     <title>dunx live demo</title>
     <meta
       name="description"
-      content="examples/full from the dunx repository, running unmodified on a Raspberry Pi 5. A guided walkthrough from dependency injection to message brokers, every step callable from the page."
+      content="examples/full from the dunx repository. A guided walkthrough from dependency injection to message brokers, every step callable from the page."
     />
     <!--
       Without these a paste of this url into Reddit, LinkedIn, Slack or X renders
       as a bare link while dunx.win unfurls with a card. `og.png` is drawn by
       `examples/full/scripts/og-card.ts` and served by `LandingMiddleware`; the
       dimensions below are the ones it shoots at, so the two cannot disagree.
+      The image path is relative because the page has no fixed host, and most
+      unfurlers want an absolute one, so a deployment behind a domain sets it.
     -->
     <meta property="og:type" content="website" />
     <meta property="og:site_name" content="dunx" />
     <meta property="og:title" content="dunx live demo" />
     <meta
       property="og:description"
-      content="Every part of the framework, running on a Raspberry Pi. Walk through it step by step: each one calls the same routes the tests and the OpenAPI document are generated from."
+      content="Every part of the framework in one running process. Walk through it step by step: each one calls the same routes the tests and the OpenAPI document are generated from."
     />
-    <meta property="og:url" content="https://demo.dunx.win/" />
-    <meta property="og:image" content="https://demo.dunx.win/og.png" />
+    <meta property="og:image" content="/og.png" />
     <meta property="og:image:width" content="1200" />
     <meta property="og:image:height" content="630" />
     <meta name="twitter:card" content="summary_large_image" />
     <meta name="twitter:title" content="dunx live demo" />
     <meta
       name="twitter:description"
-      content="Every part of the framework, running on a Raspberry Pi."
+      content="Every part of the framework in one running process."
     />
-    <meta name="twitter:image" content="https://demo.dunx.win/og.png" />
-    <link rel="canonical" href="https://demo.dunx.win/" />
+    <meta name="twitter:image" content="/og.png" />
     <!--
       The mark, inlined so the page fetches nothing for its own icon. Its
       geometry is declared once, in internal/ui/src/logo.ts. An example cannot
@@ -70,9 +70,6 @@
             <li><a href="/api/dashboard">Ops dashboard</a></li>
             <li><a href="/api/dashboard/queues">bull-board</a></li>
             <li><a href="/api/openapi.json">openapi.json</a></li>
-            <li>
-              <a href="https://firecracker.petarzarkov.com/">Firecracker</a>
-            </li>
             <li><a href="https://github.com/petarzarkov/dunx">Source</a></li>
           </ul>
         </details>
@@ -83,10 +80,10 @@
           <h1>A walkthrough of dunx, against a live process</h1>
           <p>
             This is <code>examples/full</code> from the dunx repository, running
-            unmodified on a Raspberry Pi 5 behind a Cloudflare tunnel. Each step
-            below explains one capability, shows the few lines that declare it,
-            and has a button that calls the real route: the same one the
-            example's tests and OpenAPI document are generated from.
+            unmodified. Each step below explains one capability, shows the few
+            lines that declare it, and has a button that calls the real route:
+            the same one the example's tests and OpenAPI document are generated
+            from.
           </p>
           <p>
             It starts with a single request and a single class, and ends with

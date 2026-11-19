@@ -17,7 +17,7 @@ export class ColorsStore extends CrudStore<Color> {
   }
 }
 
-// The public demo is shared, so the inherited DELETE is not served.
+// A public deployment is shared, so the inherited DELETE is not served.
 @ApiDoc({
   tags: ['Crud'],
   description: 'A generic CrudController base, served here without remove.',

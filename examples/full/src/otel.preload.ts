@@ -12,8 +12,8 @@ import {
  *
  * Unset `OTEL_EXPORTER_OTLP_ENDPOINT` registers nothing: every span stays the
  * API's non-recording one and dunx keeps minting the trace ids it logs, which
- * is how `bun start` and the public demo run. The exporter reads the variable
- * itself, along with any other `OTEL_EXPORTER_OTLP_*` setting.
+ * is how `bun start` runs. The exporter reads the variable itself, along with
+ * any other `OTEL_EXPORTER_OTLP_*` setting.
  */
 const provider = Bun.env['OTEL_EXPORTER_OTLP_ENDPOINT']
   ? new NodeTracerProvider({

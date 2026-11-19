@@ -304,7 +304,7 @@ it('enforces the origin check outside test mode', async () => {
 }, 60_000);
 
 /**
- * `AUTH_GUEST_ONLY` is what the public demo runs. Spawned rather than built
+ * `AUTH_GUEST_ONLY` is what a public deployment runs. Spawned rather than built
  * in-process, because `validate` reads the flag at boot.
  */
 it('issues a guest session and takes no registration when guest-only', async () => {
